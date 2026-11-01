@@ -63,28 +63,6 @@ def cmd_search(args):
             print(f"{h['local_date']} [{h['kind']}] {title}{extra}")
 
 
-def cmd_day(args):
-    from cfv import days
-    import datetime as dt
-    hours = tuple(int(x) for x in args.hours.split("-")) if args.hours else None
-    print(days.dossier(db.connect(args.db), dt.date.fromisoformat(args.date), hours=hours,
-                       skeleton=args.skeleton))
-
-
-def cmd_report(args):
-    from cfv import reports
-    conn = db.connect(args.db)
-    if args.action == "jobs":
-        todo = reports.jobs(conn, args.node)
-        for n, leaf in todo:
-            print(f"{n.name}\t{n.level}\t{'ham veri' if leaf else 'alt raporlar'}\t{n.label}")
-        print(f"# {len(todo)} iş", file=__import__("sys").stderr)
-    elif args.action == "input":
-        print(reports.input_text(conn, args.node or "kök"))
-    else:
-        print(reports.send(args.node))
-
-
 def cmd_chart(args):
     from cfv import chart
     print(json.dumps(chart.build(db.connect(args.db), args.out), ensure_ascii=False))
@@ -126,15 +104,6 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--by-week", action="store_true", help="Sonuçları haftalara grupla")
     p.add_argument("--limit", type=int, default=20)
 
-    p = sub.add_parser("day", help="Bir günün ham dökümü (rapor ajanına giden metin)")
-    p.add_argument("date")
-    p.add_argument("--hours", help="Yalnız bu saatler, ör. 9-12")
-    p.add_argument("--skeleton", action="store_true", help="Saatsiz kayıtlar + sayılar")
-
-    p = sub.add_parser("report", help="Hiyerarşik raporlar: jobs [düğüm] | input <düğüm> | send [düğüm]")
-    p.add_argument("action", choices=["jobs", "input", "send"])
-    p.add_argument("node", nargs="?", help="ör. 2026/10/W43/22 (jobs/send: bu alt ağaçla sınırla)")
-
     p = sub.add_parser("chart", help="Haftalık değişken grafiği (data/processed/chart.html)")
     p.add_argument("--out", type=Path, default=None)
 
@@ -155,10 +124,6 @@ def main(argv: list[str] | None = None) -> None:
         cmd_tree(args)
     elif args.cmd == "search":
         cmd_search(args)
-    elif args.cmd == "day":
-        cmd_day(args)
-    elif args.cmd == "report":
-        cmd_report(args)
     elif args.cmd == "chart":
         cmd_chart(args)
     elif args.cmd == "sync":

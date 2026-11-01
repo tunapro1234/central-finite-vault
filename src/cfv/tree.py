@@ -48,10 +48,26 @@ def week_dir(root: Path, d: dt.date, week_days: dict[tuple, list[dt.date]]) -> P
     return root / str(d.year) / f"{d.month:02d}-{TR_MONTHS[d.month - 1]}" / label
 
 
+def _report_map() -> dict[dt.date, Path]:
+    """Her gün → onu kapsayan en derin (saat parçası olmayan) rapor (src/compact üretir)."""
+    best: dict[dt.date, tuple[int, Path]] = {}
+    root = db.data_dir() / "processed" / "reports"
+    for f in root.rglob("index.md"):
+        m = re.search(r"^range:\s*(\S+)\s*(?:→\s*(\S+))?\s*$", f.read_text(), re.M)
+        if not m:
+            continue
+        d, b = dt.date.fromisoformat(m.group(1)), dt.date.fromisoformat(m.group(2) or m.group(1))
+        depth = len(f.relative_to(root).parts)
+        while d <= b:
+            if d not in best or depth > best[d][0]:
+                best[d] = (depth, f)
+            d += dt.timedelta(1)
+    return {d: f for d, (_, f) in best.items()}
+
+
 def build(conn, out: Path | None = None) -> dict:
     out = out or db.data_dir() / "processed" / "timeline"
-    from cfv import reports
-    report_of = reports.day_map()
+    report_of = _report_map()
     if out.exists():
         if not (out / MARKER).exists():
             raise RuntimeError(f"{out} cfv tarafından üretilmemiş; üzerine yazmıyorum")

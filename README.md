@@ -85,8 +85,7 @@ uv run cfv search "fatura" --kind todo
 uv run cfv sync gcal [--status]       # Google Takvim senkronu (timer bunu 30 dk'da bir çalıştırır)
 uv run cfv sync gmail                 # Gmail senkronu (başlık + snippet)
 uv run cfv chart                      # data/processed/chart.html — değişkenleri aç/kapa grafik
-uv run cfv day 2026-10-31 [--hours 9-12]  # bir günün ham dökümü
-uv run cfv report jobs | input <düğüm> | send  # hiyerarşik raporlar (aşağıda)
+./bin/compact jobs | input <düğüm>   # hiyerarşik raporlar (Go; aşağıda)
 uv run pytest
 ```
 
@@ -102,28 +101,42 @@ uv run pytest
 Ay sınırındaki haftalar iki ayda da görünür (her birinde o ayın günleri).
 Ağaç `cfv tree` ile baştan üretilir; elle yapılan değişiklikler kaybolur.
 
-### Raporlar (hiyerarşik)
+### Hierarchical recursive compaction (raporlar)
 
-Kök = tüm veri. Bir aralığın ham verisi tek LLM bağlamına (`reports.LIMIT`, ~60 bin karakter)
-sığıyorsa raporu ham veriden yazılır; sığmıyorsa alt katmana inilir ve rapor çocukların
-raporlarından yazılır:
+Veri bir LLM bağlamına sığmayacak kadar büyük ve her gün büyüyor. CFV onu ağaç olarak sıkıştırır:
 
-    kök → yıl → ay → hafta → gün → 3 saat → 1 saat
+1. **Kökten başla:** önce tüm veriyi tek seferde vermeyi dene.
+2. **Sığmıyorsa böl:** düğümün ham verisi sınırı (`Limit`, ~60 bin karakter ≈ 20k token)
+   aşıyorsa bir alt katmana in ve her çocuk için 1'i tekrarla (recursive):
 
-Az veri olan yıllar tek raporda kalır, yoğun günler saatlere iner. Dosyalar
-`data/processed/reports/<yol>/index.md` (ör. `reports/2026/10/W43/22/09-12/index.md`).
-Her raporun frontmatter'ında aralığın imzası (`sig`: kayıt sayısı + toplam uzunluk) var: yeni veri
-gelince o aralığın ve onu içeren tüm üst düğümlerin imzası değişir, yalnız onlar aşağıdan yukarı
-yeniden yazılır.
+       kök → yıl → ay → hafta (aya kırpılmış ISO hafta) → gün → 3 saat → 1 saat
 
-    uv run cfv report jobs [düğüm]     # yazılacak/bayat düğümler, çocuklar önce
-    uv run cfv report input <düğüm>    # o düğümün LLM girdisi
-    uv run cfv report send             # bp ajanı cfv-editor'a "işleri yap" mesajı
+   Bölme her dalda ayrı karar verilir: az veri olan 2016–2020 yılları tek parça kalır, yoğun
+   bir gün 3 saatlik bloklara iner. 1 saat her zaman yapraktır (gerekirse kesilir).
+3. **Aşağıdan yukarı özetle:** yaprak düğümün raporu ham veriden, bölünmüş düğümün raporu
+   çocuklarının raporlarından yazılır (bölünmüş günde + günün iskeleti: takvim, ödevler,
+   sağlık). Her rapor girdisinin en fazla ~%10'u kadardır; böylece her adım tek bağlama sığar.
+4. **Artımlı güncelle:** her rapor kapsadığı aralığın imzasını (`sig`: yaprak/bölünmüş + kayıt
+   sayısı + toplam uzunluk) taşır. Yeni veri bir aralığa girince o düğümün ve onu içeren tüm üst
+   düğümlerin imzası değişir; yalnız onlar aşağıdan yukarı yeniden yazılır, kardeşlere
+   dokunulmaz. Bir düğüm büyüyüp sınırı aşarsa yapraktan bölünmüşe döner, çocukları doğar.
+5. **Derine inme:** üstteki ajan bir ayrıntı isterse herhangi bir düğümün raporuna, ham
+   verisine (`compact input`, `compact day`) ve MCP üzerinden fotoğraflara inebilir.
 
-Raporları bp ajanı `cfv-editor` yazar (`src/cfv/prompts/editor.md`); her düğümü ayrı, temiz bir
-alt ajana verir. Biçim: `src/cfv/prompts/report.md`. Raporlar `report` olarak aranabilir; zaman
-çizelgesinde her gün kendisini kapsayan en derin rapora linklidir. `cfv-day-report.timer`
-(05:00, `cfv report send`) şimdilik kapalı.
+Dosyalar `data/processed/reports/<yol>/index.md` (ör. `reports/2026/10/W43/22/09-12/index.md`).
+Program Go ile yazıldı (`src/compact/`, ~740 satır, tek bağımlılık: saf Go SQLite):
+
+    go build -o bin/compact ./src/compact
+    ./bin/compact jobs [düğüm]       # yazılacak/bayat düğümler, çocuklar önce
+    ./bin/compact input <düğüm>      # o düğümün LLM girdisi (ham veri ya da alt raporlar)
+    ./bin/compact day <gün> [9-12]   # bir günün/saatin ham dökümü
+    ./bin/compact send [düğüm]       # cfv-editor bp ajanına "işleri yap"
+    go test ./src/compact
+
+Raporları bp ajanı `cfv-editor` yazar (`src/compact/editor.md`); her düğümü ayrı, temiz bir alt
+ajana verir. Biçim: `src/compact/report.md`. `uv run cfv ingest reports` raporları aranabilir
+yapar; zaman çizelgesinde her gün kendisini kapsayan en derin rapora linklidir.
+`cfv-day-report.timer` (05:00, `compact send`) şimdilik kapalı.
 
 ### Eşleştirme
 

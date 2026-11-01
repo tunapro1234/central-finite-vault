@@ -1,8 +1,16 @@
 # Rapor biçimi (her katman: kök / yıl / ay / hafta / gün / 3 saat / 1 saat)
 
-Girdi `uv run cfv report input <düğüm>` çıktısıdır: ya HAM VERİ (aralık sığdı) ya da ALT RAPORLAR
+Girdi `./bin/compact input <düğüm>` çıktısıdır: ya HAM VERİ (aralık sığdı) ya da ALT RAPORLAR
 (aralık bölündü; çocukların raporları + bölünmüş günse günün iskeleti). Bir de varsa aynı katmanın
 ÖNCEKİ raporu (süreklilik: açık işleri taşı, süren temaları gör).
+
+Derine inme: üst katmanda bir ayrıntı gerekirse (bir gün, bir anı, bir fotoğraf) aşağı inebilirsin:
+- herhangi bir düğümün raporu: `data/processed/reports/<düğüm>/index.md`
+- herhangi bir düğümün girdisi (yapraksa ham veri): `./bin/compact input <düğüm>`
+- bir günün/saatin ham dökümü: `./bin/compact day YYYY-MM-DD [9-12]`
+- MCP `cfv` araçları: `search` (ne zaman?), `timeline`, `photos` (foto dosya yolları; seçtiğini
+  Read ile açıp görebilirsin), `people`
+Raporda ayrıntının nerede olduğunu düğüm adıyla göster (ör. "ayrıntı: 2026/10/W43/22").
 
 Kurallar:
 - Yalnızca girdiye dayan; tahmin edersen "muhtemelen" de. Psikolojik/duygu/sağlık yorumu YAPMA;

@@ -1,4 +1,4 @@
-"""Hiyerarşik raporlar (data/processed/reports/**/index.md, bkz. cfv.reports) → 'report' event'leri.
+"""Hiyerarşik raporlar (data/processed/reports/**/index.md, src/compact üretir) → 'report' event'leri.
 
 Raporlar aranabilir olsun diye DB'ye girer: "ne zaman şu işle uğraştım" sorusu en iyi buradan
 yanıtlanır (rapor, aralığın kaynaklarını zaten birleştirmiş halde). Her rapor kapsadığı aralığın
@@ -11,7 +11,7 @@ import datetime as dt
 import re
 
 from cfv.ingest import Batch
-from cfv.reports import root_dir
+from cfv import db
 from cfv.timeutil import DEFAULT_TZ
 
 IMPORTER = "cfv.sources.reports@1"
@@ -23,7 +23,7 @@ def _field(text: str, key: str) -> str | None:
 
 
 def ingest(conn) -> dict:
-    root = root_dir()
+    root = db.data_dir() / "processed" / "reports"
     files = sorted(root.rglob("index.md"))
     if not files:
         raise FileNotFoundError(root)
