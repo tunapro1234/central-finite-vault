@@ -1,48 +1,18 @@
-"""Gün/hafta/ay raporları. Raporları bp ajanı `cfv-editor` yazar (iş tanımı:
-src/cfv/prompts/editor.md); bu modül yalnızca veriyi LLM'e sığacak parçalara böler:
+"""Bir günün (ya da gün içi saat aralığının) verisini LLM'e verilecek sade metne döker.
+Hiyerarşik raporlar bunu kullanır: bkz. cfv.reports.
 
-    cfv day 2026-10-31               # o günün ham verisi (sığıyorsa tek parça)
-    cfv day 2026-10-31 --plan        # sığmıyorsa parçalar: 3 saatlik, o da sığmazsa 1 saatlik
-    cfv day 2026-10-31 --hours 9-12  # tek parça
-    cfv day 2026-10-31 --skeleton    # gün iskeleti (takvim, ödev, sağlık, sayılar); parçalı günde
-    cfv review send                  # eksik raporları bulup ajana tek mesajla iş listesi gönderir
-
-Hiyerarşi: parça → gün → hafta → ay. Her seviye bir alttakinin raporlarını okur, ham veriyi değil;
-böylece veri ne kadar büyürse büyüsün her adım tek bir LLM bağlamına sığar.
+    cfv day 2026-10-31               # o günün ham verisi
+    cfv day 2026-10-31 --hours 9-12  # yalnız o saatler
+    cfv day 2026-10-31 --skeleton    # saatsiz kayıtlar + sayılar (bölünmüş gün için)
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import json
-import subprocess
 from collections import Counter, defaultdict
-from pathlib import Path
 
-from cfv import db
-
-EDITOR = "cfv-editor"
-LIMIT = 60_000      # karakter (~20k token); bir dökümün üst sınırı
 MAX_TEXT = 220
-
-def days_dir() -> Path:
-    return db.data_dir() / "processed" / "days"
-
-
-def report_path(d: dt.date) -> Path:
-    return days_dir() / str(d.year) / f"{d.isoformat()}.md"
-
-
-def part_path(d: dt.date, h0: int, h1: int) -> Path:
-    return db.data_dir() / "processed" / "parts" / str(d.year) / d.isoformat() / f"{h0:02d}-{h1:02d}.md"
-
-
-def week_path(year: int, week: int) -> Path:
-    return db.data_dir() / "processed" / "weeks" / str(year) / f"{year}-W{week:02d}.md"
-
-
-def month_path(year: int, month: int) -> Path:
-    return db.data_dir() / "processed" / "months" / str(year) / f"{year}-{month:02d}.md"
 
 
 def _hm(start_utc: str, off: int | None) -> str:
@@ -60,13 +30,15 @@ def _local_hour(r) -> float:
     return t.hour + t.minute / 60
 
 
-def dossier(conn, d: dt.date, hours: tuple[int, int] | None = None, skeleton: bool = False) -> str:
+def dossier(conn, d: dt.date, hours: tuple[int, int] | None = None, skeleton: bool = False,
+            week_todos: bool = True) -> str:
     """Bir günün verisi, LLM'e verilecek sade metin.
     hours=(9, 12): yalnız o saatlerdeki saatli kayıtlar (parça). skeleton: mesaj/foto/mail ayrıntısı
     yerine sayılar (parçalı günde gün ajanının girdisi)."""
     day = d.isoformat()
     rows = conn.execute("""SELECT id, kind, start_utc, end_utc, tz_offset_min, time_quality, title, body, payload
-                           FROM event WHERE local_date = ? ORDER BY start_utc""", (day,)).fetchall()
+                           FROM event WHERE local_date = ? AND kind NOT IN ('day_report', 'report')
+                           ORDER BY start_utc""", (day,)).fetchall()
     if hours:
         rows = [r for r in rows if r[5] not in ("day", "week") and hours[0] <= _local_hour(r) < hours[1]]
     by = defaultdict(list)
@@ -97,7 +69,7 @@ def dossier(conn, d: dt.date, hours: tuple[int, int] | None = None, skeleton: bo
             out.append(f"- {when} {r[6] or '(başlıksız)'} [{p.get('calendar', '')}]{extra}")
         out.append("")
 
-    todos = [] if hours else by["todo"] + conn.execute("""SELECT id, kind, start_utc, end_utc, tz_offset_min, time_quality, title,
+    todos = [] if hours else by["todo"] if not week_todos else by["todo"] + conn.execute("""SELECT id, kind, start_utc, end_utc, tz_offset_min, time_quality, title,
             body, payload FROM event WHERE kind='todo' AND time_quality='week'
             AND local_date BETWEEN date(?, '-6 days') AND ? AND local_date != ?""", (day, day, day)).fetchall()
     if todos:
@@ -120,7 +92,7 @@ def dossier(conn, d: dt.date, hours: tuple[int, int] | None = None, skeleton: bo
         n = {k: len(v) for k, v in by.items() if k in {"photo", "video", "email", "whatsapp"} and v}
         if n:
             blocks = Counter(f"{int(_local_hour(r)) // 3 * 3:02d}" for k in n for r in by[k])
-            out += ["## Ayrıntısı parça raporlarında olanlar",
+            out += ["## Ayrıntısı alt raporlarda olanlar",
                     "- " + ", ".join(f"{k}={v}" for k, v in n.items()),
                     "- 3 saatlik bloklara göre: " + ", ".join(f"{h}:00×{c}" for h, c in sorted(blocks.items())), ""]
         for k in ("photo", "video", "email", "whatsapp"):
@@ -185,63 +157,9 @@ def dossier(conn, d: dt.date, hours: tuple[int, int] | None = None, skeleton: bo
         out += ["## Sağlık (sayılar)", *[f"- {h}" for h in health], ""]
 
     others = [k for k in by if k not in {"calendar", "todo", "note", "photo", "video", "email", "whatsapp",
-                                         "zepp_day", "sleep", "workout", "day_report"}]
+                                         "zepp_day", "sleep", "workout"}]
     for k in others:
         out.append(f"## {k} ({len(by[k])})")
         out += [f"- {_hm(r[2], r[4])} {_cut(r[6], 120)}" for r in by[k][:50]]
         out.append("")
-    text = "\n".join(out)
-    if len(text) > LIMIT:  # 1 saatlik parça bile sığmıyorsa: son çare kes
-        text = text[:LIMIT] + f"\n\n… (sınır: {len(text) - LIMIT} karakter kesildi)"
-    return text
-
-
-def plan(conn, d: dt.date) -> list[tuple[int, int]]:
-    """Gün sığıyorsa [] (tek parça). Sığmıyorsa veri olan 3 saatlik bloklar; bir blok da
-    sığmıyorsa o blok 1 saatlik parçalara bölünür."""
-    if len(dossier(conn, d)) < LIMIT:
-        return []
-    out = []
-    for h in range(0, 24, 3):
-        text = dossier(conn, d, (h, h + 3))
-        if "Sayılar: veri yok" in text:
-            continue
-        if len(text) < LIMIT:
-            out.append((h, h + 3))
-        else:
-            out += [(x, x + 1) for x in range(h, h + 3) if "Sayılar: veri yok" not in dossier(conn, d, (x, x + 1))]
-    return out
-
-
-def jobs(today: dt.date | None = None) -> list[str]:
-    """Eksik raporlar: geçen ayın başından dünkü güne kadar günler (sığmayan günün önce parçaları),
-    biten son hafta, biten son ay. Alt seviye önce gelir; üst seviye alttakinin raporlarını kullanır."""
-    today = today or dt.date.today()
-    last_sunday = today - dt.timedelta(days=today.weekday() + 1)
-    last_month_end = today.replace(day=1) - dt.timedelta(days=1)
-    start = min(last_month_end.replace(day=1), last_sunday - dt.timedelta(days=6))
-    conn = db.connect(db.default_db_path())
-    out = []
-    for d in (start + dt.timedelta(days=i) for i in range((today - start).days)):
-        if report_path(d).exists():
-            continue
-        parts = plan(conn, d)
-        out += [f"parça {d.isoformat()} {h0:02d}-{h1:02d}" for h0, h1 in parts
-                if not part_path(d, h0, h1).exists()]
-        out.append(f"gün {d.isoformat()}" + (" (parçalı)" if parts else ""))
-    conn.close()
-    y, w, _ = last_sunday.isocalendar()
-    if not week_path(y, w).exists():
-        out.append(f"hafta {y}-W{w:02d}")
-    if not month_path(last_month_end.year, last_month_end.month).exists():
-        out.append(f"ay {last_month_end.year}-{last_month_end.month:02d}")
-    return out
-
-
-def send(today: dt.date | None = None) -> str:
-    todo = jobs(today)
-    if not todo:
-        return "eksik rapor yok"
-    msg = ("İş listesi (src/cfv/prompts/editor.md'yi oku, sırayla yap): " + "; ".join(todo))
-    p = subprocess.run(["bp", "msg", EDITOR, msg], capture_output=True, text=True)
-    return (p.stdout or p.stderr).strip().splitlines()[-1] if (p.stdout or p.stderr) else msg
+    return "\n".join(out)

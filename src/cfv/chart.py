@@ -21,7 +21,7 @@ KIND_LABELS = {
     "todo": "Ödev maddesi", "note": "Not", "email": "E-posta", "sleep": "Uyku kaydı",
     "workout": "Egzersiz sayısı", "zepp_day": "Zepp günü",
 }
-SKIP_KINDS = {"zepp_day", "sleep", "day_report"}  # bunlar aşağıda anlamlı birimle var
+SKIP_KINDS = {"zepp_day", "sleep", "day_report", "report"}  # bunlar aşağıda anlamlı birimle var
 TOP_PEOPLE = 12
 
 

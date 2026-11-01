@@ -83,9 +83,10 @@ uv run cfv tree                       # data/processed/timeline/ klasör ağacı
 uv run cfv search "taşınma" --by-week # "ne zaman?" → haftalara göre
 uv run cfv search "fatura" --kind todo
 uv run cfv sync gcal [--status]       # Google Takvim senkronu (timer bunu 30 dk'da bir çalıştırır)
+uv run cfv sync gmail                 # Gmail senkronu (başlık + snippet)
 uv run cfv chart                      # data/processed/chart.html — değişkenleri aç/kapa grafik
-uv run cfv day 2026-10-31             # bir günün ham dosyası (gün ajanına giden metin)
-uv run cfv days run [--from --to]     # gün raporları → data/processed/days/YYYY/YYYY-MM-DD.md
+uv run cfv day 2026-10-31 [--hours 9-12]  # bir günün ham dökümü
+uv run cfv report jobs | input <düğüm> | send  # hiyerarşik raporlar (aşağıda)
 uv run pytest
 ```
 
@@ -101,31 +102,28 @@ uv run pytest
 Ay sınırındaki haftalar iki ayda da görünür (her birinde o ayın günleri).
 Ağaç `cfv tree` ile baştan üretilir; elle yapılan değişiklikler kaybolur.
 
-### Gün raporları
+### Raporlar (hiyerarşik)
 
-Raporları bp ajanı `cfv-editor` yazar (iş tanımı: `src/cfv/prompts/editor.md`, gün formatı:
-`src/cfv/prompts/day.md`). Her sabah 05:00'te `cfv-day-report.timer` → `cfv review send`
-eksikleri bulur (geçen ayın başından düne kadar günler, biten son hafta, biten son ay) ve
-ajana tek mesajla iş listesi yollar. Ajan her gün için `cfv day YYYY-MM-DD` çıktısını
-(takvim + o sırada çekilen foto sayısı, ödevler, notlar, fotolar, WhatsApp, mail, sağlık),
-önceki günlerin raporlarını ve kişisel bağlamı (`data/config/day-context.md`, git dışı) okur.
+Kök = tüm veri. Bir aralığın ham verisi tek LLM bağlamına (`reports.LIMIT`, ~60 bin karakter)
+sığıyorsa raporu ham veriden yazılır; sığmıyorsa alt katmana inilir ve rapor çocukların
+raporlarından yazılır:
 
-Hiyerarşi **parça → gün → hafta → ay**; her adım bir alttakinin raporlarını okur, böylece veri
-büyüse de her iş tek bir LLM bağlamına sığar. Bir günün dökümü sınırı (`days.LIMIT`, ~60 bin
-karakter) aşarsa gün 3 saatlik parçalara, bir parça da aşarsa 1 saatliklere bölünür
-(`cfv day <tarih> --plan`). Her parçayı ayrı bir alt ajan özetler; gün ajanı parça özetlerini ve
-günün iskeletini (`--skeleton`: takvim, ödevler, sağlık, sayılar) birleştirir.
+    kök → yıl → ay → hafta → gün → 3 saat → 1 saat
 
-- parça: `data/processed/parts/YYYY/YYYY-MM-DD/HH-HH.md`
-- gün: `data/processed/days/YYYY/YYYY-MM-DD.md` (YAML frontmatter + neler oldu, somut
-  çıktılar, plan/gerçekleşen, açık işler, bağlantılar, değerlendirme, dönem sinyalleri)
-- hafta: `data/processed/weeks/YYYY/YYYY-Www.md` (o haftanın gün raporlarından)
-- ay: `data/processed/months/YYYY/YYYY-MM.md` (gün + hafta raporlarından)
+Az veri olan yıllar tek raporda kalır, yoğun günler saatlere iner. Dosyalar
+`data/processed/reports/<yol>/index.md` (ör. `reports/2026/10/W43/22/09-12/index.md`).
+Her raporun frontmatter'ında aralığın imzası (`sig`: kayıt sayısı + toplam uzunluk) var: yeni veri
+gelince o aralığın ve onu içeren tüm üst düğümlerin imzası değişir, yalnız onlar aşağıdan yukarı
+yeniden yazılır.
 
-Gün raporları `day_report` olarak aranabilir ve haftalık README'lerden linklidir.
-Dönemler (era) ileride ay/hafta raporlarından çıkarılacak.
+    uv run cfv report jobs [düğüm]     # yazılacak/bayat düğümler, çocuklar önce
+    uv run cfv report input <düğüm>    # o düğümün LLM girdisi
+    uv run cfv report send             # bp ajanı cfv-editor'a "işleri yap" mesajı
 
-**Not:** gün raporu o günün mesajlarını Claude'a gönderir (Tuna'nın kararı, 2026-11-01).
+Raporları bp ajanı `cfv-editor` yazar (`src/cfv/prompts/editor.md`); her düğümü ayrı, temiz bir
+alt ajana verir. Biçim: `src/cfv/prompts/report.md`. Raporlar `report` olarak aranabilir; zaman
+çizelgesinde her gün kendisini kapsayan en derin rapora linklidir. `cfv-day-report.timer`
+(05:00, `cfv report send`) şimdilik kapalı.
 
 ### Eşleştirme
 

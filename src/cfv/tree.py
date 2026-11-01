@@ -50,6 +50,8 @@ def week_dir(root: Path, d: dt.date, week_days: dict[tuple, list[dt.date]]) -> P
 
 def build(conn, out: Path | None = None) -> dict:
     out = out or db.data_dir() / "processed" / "timeline"
+    from cfv import reports
+    report_of = reports.day_map()
     if out.exists():
         if not (out / MARKER).exists():
             raise RuntimeError(f"{out} cfv tarafından üretilmemiş; üzerine yazmıyorum")
@@ -110,9 +112,10 @@ def build(conn, out: Path | None = None) -> dict:
             k = Counter(r[1] for r in evs)
             wcount.update(k)
             lines += [f"## {TR_DAYS[d.weekday()]} {d.day} {TR_MONTHS[d.month - 1]} {d.year}", ""]
-            rep = db.data_dir() / "processed" / "days" / str(d.year) / f"{d.isoformat()}.md"
-            if rep.exists():
-                lines += [f"📝 [Gün raporu]({rep})", ""]
+            rep = report_of.get(d)
+            if rep:
+                lvl = re.search(r"^level:\s*(.+?)\s*$", rep.read_text(), re.M)
+                lines += [f"📝 [{(lvl.group(1) if lvl else 'rapor').capitalize()} raporu]({rep})", ""]
 
             cal = [r for r in evs if r[1] == "calendar"]
             if cal:
