@@ -23,8 +23,20 @@ Durum anahtarı: ⬜ bekleniyor · 🟨 kısmi/sürüyor · 🟩 ham veri hazır
 | 4 | Apple Music Play Activity | privacy.apple.com export → `raw/apple-privacy/` | CSV (`Apple Music - Play History Daily Tracks` / `Play Activity`) | her dinleme: zaman, parça, süre | ⬜ Tuna talep edecek |
 | 5 | Snapchat My Data | `raw/snapchat/` | ZIP → JSON/HTML (memories_history, chat_history, ...) | memory'ler, snap/sohbet zamanları, karşı taraf | ⬜ Tuna talep edecek |
 | 6 | BeReal GDPR | `raw/bereal/` | ZIP → JSON + görseller | her BeReal: zaman, ön/arka foto, konum | ⬜ Tuna talep edecek |
-| 8 | **Google Calendar** (ana takvim) | `raw/google-takeout/**/Calendar/*.ics` veya `raw/calendar/**/*.ics` | iCalendar | tüm etkinlikler, tekrarlar açılır | ⬜ okuyucu hazır (`cfv ingest calendar-ics`), veri bekleniyor |
+| 8 | **Google Calendar** (ana takvim) | `raw/google-calendar/events.json` (+ `changes.jsonl`, `state.json`) — **cfv yazar** (photos değil) | Google Calendar API JSON (gog, salt-okur) | tüm takvimler, tekrarlar açılmış, 2010 → bugün+400 gün; silinen olaylar `changes.jsonl`'da arşivlenir; tatil takvimi import'ta atlanır | ✅ sürekli senkron: `cfv-gcal-sync.timer` (30 dk), ~4.100 event |
 | 7 | Google Takeout — YouTube | `raw/google-takeout/` | `watch-history.json` (JSON seç, HTML değil) | izleme zamanı, video başlığı, kanal | ⬜ Tuna talep edecek |
+
+### Google Takvim senkronu
+- `systemd --user` timer `cfv-gcal-sync.timer` her 30 dakikada `cfv sync gcal` çalıştırır
+  (birimler: `src/systemd/`, kurulum `src/systemd/install.sh`).
+- Tur: takvim başına `gog calendar changed --since <son kontrol>`; değişiklik varsa ya da son tam
+  çekimden 24 sa geçtiyse tam çekim → fark `changes.jsonl`'a, `events.json` atomik yenilenir →
+  `calendar-google` import + `timeline/` yeniden üretilir.
+- gog yalnızca `--readonly --enable-commands=calendar` ile çağrılır; hesap `tunagul54@gmail.com`
+  (gog: `~/.local/share/cfv-gog/gog`, sunucu girişinin kopyası). tunagul29 yalnız Gmail yetkili.
+- Ağ yok / token düştü: log'a yazar, dosyalara dokunmaz, 0 ile çıkar. Olayların %20'sinden
+  fazlası birden silinmiş görünürse yazmaz (yarım çekime karşı koruma).
+- Log: `data/logs/gcal-sync.log` · durum: `uv run cfv sync gcal --status`.
 
 ## Kapsam dışı
 
@@ -52,3 +64,4 @@ Durum anahtarı: ⬜ bekleniyor · 🟨 kısmi/sürüyor · 🟩 ham veri hazır
 - 2026-11-01 — yedek tamamlandı (22 GB), AFC dökümleri eklendi. Ayrıntılı ham envanter: `data/raw/README.md` (photos ajanı). Takvim kaynağı (yedek mi, iCloud/Google + vdirsyncer mi) henüz kararlaştırılmadı.
 - 2026-11-01 — yedekten çıkarılan ağaç (`extract-2026-11-01/`) eklendi: notlar, takvim, kişiler, SMS, WhatsApp, Zepp, sesli notlar.
 - 2026-11-01 — ilk importlar: fotolar, notlar+ödevler, iOS takvim, WhatsApp, Zepp. Takvimin ana kaynağı Google (Takeout/vdirsyncer bekleniyor). Sesli notlar kapsam dışı.
+- 2026-11-01 — Google Calendar: gog ile salt-okur sürekli senkron (`data/raw/google-calendar/`, timer 30 dk). İlk çekim 4.257 olay (5 takvim).

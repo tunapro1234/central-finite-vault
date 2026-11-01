@@ -12,6 +12,9 @@ Repo iskeleti, `.gitignore`, uv/pyproject, README, veri manifestosu, şema, sent
 - Temel arama: FTS5 (Türkçe katlama, önek), `when` = eşleşmeleri haftalara toplama.
 - MCP (`cfv-mcp`, salt-okur): `when`, `search`, `timeline`, `digest`, `week_page`, `people`, `photos`.
 
+## Faz 1.1 — Google Takvim ✅ (2026-11-01)
+- gog ile salt-okur, artımlı sürekli senkron (`cfv-gcal-sync.timer`, 30 dk) + `calendar-google` okuyucu.
+
 ## Faz 2 — Anlamsal (vektör) arama ← SIRADAKİ
 Hedef: ajanlar "ne zaman şu işle uğraştım?" sorusunu kelime tutmasa da anlamla bulsun.
 - **Yerel** embedding modeli (çok dilli, Türkçe iyi: bge-m3 / multilingual-e5 sınıfı), GPU'da.
@@ -27,7 +30,6 @@ Hedef: ajanlar "ne zaman şu işle uğraştım?" sorusunu kelime tutmasa da anla
   (Tuna'nın gerçek soruları + beklenen haftalar).
 
 ## Faz 3 — Daha fazla kaynak
-- Google Calendar (Takeout .ics ya da vdirsyncer) — okuyucu hazır.
 - Apple Music Play Activity (privacy.apple.com), Snapchat, BeReal, YouTube (Takeout JSON).
 - Yedekte duran ama henüz alınmayanlar: SMS/iMessage, Kişiler (person birleştirme için),
   Anımsatıcılar, Apple foto arama indeksi `psi.sqlite` (sahne etiketi, OCR, yer adları).

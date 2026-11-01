@@ -125,3 +125,35 @@ def test_turkish_search_end_to_end(conn, tmp_path):
     b.event("n1", "note", dt.datetime(2025, 1, 1, tzinfo=dt.timezone.utc), title="IŞIK sensörü", body="ölçüm")
     for q in ("ışık", "IŞIK", "isik", "Işık sens", "olcum"):
         assert len(search.search(conn, q)) == 1, q
+
+
+def test_calendar_gcal_snapshot_and_diff(conn, tmp_path):
+    import json
+    from cfv import gcal_sync
+    from cfv.sources import calendar_gcal
+    ev = [
+        {"CalendarID": "me@example.com", "id": "a1", "etag": "1", "summary": "Robot montaj",
+         "start": {"dateTime": "2025-03-03T18:00:00+03:00"}, "end": {"dateTime": "2025-03-03T20:00:00+03:00"},
+         "location": "Atölye", "attendees": [{"email": "me@example.com", "self": True}, {"email": "x@example.com"}]},
+        {"CalendarID": "me@example.com", "id": "a2", "etag": "1", "summary": "Kamp",
+         "start": {"date": "2025-03-15"}, "end": {"date": "2025-03-17"}},
+        {"CalendarID": "me@example.com", "id": "a3", "status": "cancelled", "summary": "iptal",
+         "start": {"date": "2025-03-16"}},
+        {"CalendarID": "tr.turkish#holiday@group.v.calendar.google.com", "id": "h", "summary": "Bayram",
+         "start": {"date": "2025-03-30"}, "end": {"date": "2025-03-31"}},
+    ]
+    p = tmp_path / "events.json"
+    p.write_text(json.dumps({"fetched_at": "2025-03-01T00:00:00Z", "events": ev,
+                             "calendars": [{"id": "me@example.com", "summary": "Ben"}]}))
+    assert calendar_gcal.ingest(conn, p) == {"events": 2, "skipped": 2}
+    rows = conn.execute("SELECT local_date, title, time_quality, tz_offset_min, start_utc FROM event "
+                        "ORDER BY start_utc").fetchall()
+    assert rows[0] == ("2025-03-03", "Robot montaj", "exact", 180, "2025-03-03T15:00:00Z")
+    assert rows[1][:3] == ("2025-03-15", "Kamp", "day")
+    assert search.search(conn, "atolye")[0]["title"] == "Robot montaj"
+
+    new = [dict(ev[0], etag="2"), ev[3], {**ev[1], "id": "a4"}]
+    d = gcal_sync.diff(ev, new)
+    assert d["added"] == ["me@example.com/a4"]
+    assert d["changed"] == ["me@example.com/a1"]
+    assert [e["id"] for e in d["removed"]] == ["a2", "a3"]

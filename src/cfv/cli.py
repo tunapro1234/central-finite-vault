@@ -16,6 +16,7 @@ SOURCES = {
     "notes": "notes",
     "calendar-ios": "calendar_ios",
     "calendar-ics": "calendar_ics",
+    "calendar-google": "calendar_gcal",
     "whatsapp": "whatsapp",
     "zepp": "zepp",
 }
@@ -58,6 +59,18 @@ def cmd_search(args):
             print(f"{h['local_date']} [{h['kind']}] {title}{extra}")
 
 
+def cmd_sync(args):
+    from cfv import gcal_sync
+    if args.status:
+        state = gcal_sync._read_json(gcal_sync.out_dir() / "state.json", {})
+        print(json.dumps(state, ensure_ascii=False, indent=1))
+        print(f"log: {gcal_sync.log_path()}")
+        return
+    gcal_sync.run(force_full=args.full, allow_mass_removal=args.allow_mass_removal,
+                  ingest=not args.no_ingest)
+    print(gcal_sync.log_path().read_text().rstrip().splitlines()[-1])
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="cfv", description="Central Finite Vault")
     parser.add_argument("--db", type=Path, default=None, help="Varsayılan: data/processed/cfv.sqlite")
@@ -77,6 +90,14 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--by-week", action="store_true", help="Sonuçları haftalara grupla")
     p.add_argument("--limit", type=int, default=20)
 
+    p = sub.add_parser("sync", help="Google Takvim'i data/raw/google-calendar/'a senkronla (salt-okur)")
+    p.add_argument("target", choices=["gcal"])
+    p.add_argument("--full", action="store_true", help="Değişiklik kontrolünü atla, tam çek")
+    p.add_argument("--no-ingest", action="store_true", help="cfv.sqlite/timeline'ı güncelleme")
+    p.add_argument("--allow-mass-removal", action="store_true",
+                   help="Olayların %%20'sinden fazlası silinmiş görünse de yaz")
+    p.add_argument("--status", action="store_true", help="Son senkron durumunu göster")
+
     args = parser.parse_args(argv)
     if args.cmd == "init-db":
         print(db.init_db(args.db))
@@ -86,6 +107,8 @@ def main(argv: list[str] | None = None) -> None:
         cmd_tree(args)
     elif args.cmd == "search":
         cmd_search(args)
+    elif args.cmd == "sync":
+        cmd_sync(args)
 
 
 if __name__ == "__main__":

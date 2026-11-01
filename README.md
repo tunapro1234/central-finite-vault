@@ -64,11 +64,14 @@ src/cfv/
   search.py         temel arama (FTS + haftalara toplama, dönem özeti)
   tree.py           tarih bazlı klasör ağacı
   mcp_server.py     Claude için salt-okur MCP
+  gcal_sync.py      Google Takvim → data/raw/google-calendar/ (gog, salt-okur, artımlı)
+src/systemd/        cfv-* systemd --user birimleri (install.sh ile bağlanır)
 tests/              testler + sentetik fixture'lar
 docs/               belgeler
 data/               KİŞİSEL VERİ — git dışı, chmod 700
-  raw/              ham kaynaklar (photos ajanı doldurur; dokunma)
+  raw/              ham kaynaklar (photos ajanı doldurur; dokunma — tek istisna google-calendar/, cfv senkronu)
   processed/        cfv.sqlite + timeline/ (tamamen türetilmiş, her an yeniden üretilir)
+  logs/             zamanlanmış işlerin log'ları (gcal-sync.log)
 ```
 
 ## Kullanım
@@ -79,6 +82,7 @@ uv run cfv ingest all                 # tüm kaynakları içe aktar (~30 sn); te
 uv run cfv tree                       # data/processed/timeline/ klasör ağacını üret
 uv run cfv search "taşınma" --by-week # "ne zaman?" → haftalara göre
 uv run cfv search "fatura" --kind todo
+uv run cfv sync gcal [--status]       # Google Takvim senkronu (timer bunu 30 dk'da bir çalıştırır)
 uv run pytest
 ```
 
