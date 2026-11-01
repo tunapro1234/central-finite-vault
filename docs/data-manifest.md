@@ -38,6 +38,16 @@ Durum anahtarı: ⬜ bekleniyor · 🟨 kısmi/sürüyor · 🟩 ham veri hazır
   fazlası birden silinmiş görünürse yazmaz (yarım çekime karşı koruma).
 - Log: `data/logs/gcal-sync.log` · durum: `uv run cfv sync gcal --status`.
 
+### Gmail (`data/raw/gmail/<hesap>/`)
+
+- `uv run cfv sync gmail` (elle; timer yok). Hesaplar `data/config/gmail-accounts` (git dışı).
+- gog `--readonly --enable-commands=gmail`; yalnız başlıklar + snippet (`--format metadata`, gövde yok).
+- `messages.jsonl` (mesaj başına bir satır) + `state.json`. İlk çekim ay ay, sonra son çekimin
+  2 gün öncesinden `after:` ile yalnız yeniler. Kota dolunca 65 sn bekler.
+- Import: `email` event'leri; SPAM/TRASH/DRAFT atlanır; kişiler gönderen/alıcı adresinden.
+- Sınır: eski mesajlardaki etiket değişiklikleri (çöpe atma vb.) geri yansımaz.
+- Log: `data/logs/gmail-sync.log`.
+
 ## Kapsam dışı
 
 - Sesli notlar (Tuna, 2026-11-01: "kaldır") — ham veride durur, import edilmez.

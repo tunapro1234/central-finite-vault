@@ -18,6 +18,7 @@ SOURCES = {
     "calendar-ics": "calendar_ics",
     "calendar-google": "calendar_gcal",
     "day-reports": "day_reports",
+    "gmail": "gmail",
     "whatsapp": "whatsapp",
     "zepp": "zepp",
 }
@@ -79,6 +80,11 @@ def cmd_chart(args):
 
 
 def cmd_sync(args):
+    if args.target == "gmail":
+        from cfv import gmail_sync
+        gmail_sync.run(ingest=not args.no_ingest)
+        print(gmail_sync.log_path().read_text().rstrip().splitlines()[-1])
+        return
     from cfv import gcal_sync
     if args.status:
         state = gcal_sync._read_json(gcal_sync.out_dir() / "state.json", {})
@@ -118,8 +124,8 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("chart", help="Haftalık değişken grafiği (data/processed/chart.html)")
     p.add_argument("--out", type=Path, default=None)
 
-    p = sub.add_parser("sync", help="Google Takvim'i data/raw/google-calendar/'a senkronla (salt-okur)")
-    p.add_argument("target", choices=["gcal"])
+    p = sub.add_parser("sync", help="Google Takvim / Gmail'i data/raw/'a senkronla (salt-okur)")
+    p.add_argument("target", choices=["gcal", "gmail"])
     p.add_argument("--full", action="store_true", help="Değişiklik kontrolünü atla, tam çek")
     p.add_argument("--no-ingest", action="store_true", help="cfv.sqlite/timeline'ı güncelleme")
     p.add_argument("--allow-mass-removal", action="store_true",

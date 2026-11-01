@@ -103,13 +103,20 @@ Ağaç `cfv tree` ile baştan üretilir; elle yapılan değişiklikler kaybolur.
 
 ### Gün raporları
 
-Her sabah 05:00'te (`cfv-day-report.timer`) dün ve son 7 günden eksik kalanlar için başsız,
-araçsız bir `claude -p` çağrısı yapılır. Girdi: o günün tüm verisi (takvim + o sırada çekilen
-foto sayısı, ödevler, notlar, fotolar, WhatsApp, mail, sağlık sayıları) + önceki 3 günün
-raporları + kişisel bağlam (`data/config/day-context.md`, git dışı). Çıktı YAML frontmatter'lı
-markdown: özet, neler oldu (kaynaklar birleştirilmiş), somut çıktılar, plan/gerçekleşen,
-açık işler, bağlantılar, dönem sinyalleri. Raporlar `day_report` olarak aranabilir ve haftalık
-README'lerden linklidir. Prompt: `src/cfv/prompts/day.md`. Log: `data/logs/day-reports.log`.
+Raporları bp ajanı `cfv-editor` yazar (iş tanımı: `src/cfv/prompts/editor.md`, gün formatı:
+`src/cfv/prompts/day.md`). Her sabah 05:00'te `cfv-day-report.timer` → `cfv review send`
+eksikleri bulur (geçen ayın başından düne kadar günler, biten son hafta, biten son ay) ve
+ajana tek mesajla iş listesi yollar. Ajan her gün için `cfv day YYYY-MM-DD` çıktısını
+(takvim + o sırada çekilen foto sayısı, ödevler, notlar, fotolar, WhatsApp, mail, sağlık),
+önceki günlerin raporlarını ve kişisel bağlamı (`data/config/day-context.md`, git dışı) okur.
+
+- gün: `data/processed/days/YYYY/YYYY-MM-DD.md` (YAML frontmatter + neler oldu, somut
+  çıktılar, plan/gerçekleşen, açık işler, bağlantılar, değerlendirme, dönem sinyalleri)
+- hafta: `data/processed/weeks/YYYY/YYYY-Www.md` (o haftanın gün raporlarından)
+- ay: `data/processed/months/YYYY/YYYY-MM.md` (gün + hafta raporlarından)
+
+Gün raporları `day_report` olarak aranabilir ve haftalık README'lerden linklidir.
+Dönemler (era) ileride ay/hafta raporlarından çıkarılacak.
 
 **Not:** gün raporu o günün mesajlarını Claude'a gönderir (Tuna'nın kararı, 2026-11-01).
 

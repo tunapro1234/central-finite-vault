@@ -157,3 +157,34 @@ def test_calendar_gcal_snapshot_and_diff(conn, tmp_path):
     assert d["added"] == ["me@example.com/a4"]
     assert d["changed"] == ["me@example.com/a1"]
     assert [e["id"] for e in d["removed"]] == ["a2", "a3"]
+
+
+def test_gmail_reader(conn, tmp_path):
+    import json
+    from cfv.sources import gmail
+    acc = tmp_path / "me@example.com"
+    acc.mkdir()
+    msgs = [
+        {"id": "g1", "thread": "t1", "time": "2025-04-01T09:00:00Z", "labels": ["INBOX", "CATEGORY_UPDATES"],
+         "from": "Ayşe Örnek <ayse@example.com>", "to": "me@example.com", "cc": None,
+         "subject": "Robot toplantısı", "snippet": "yarın atölyede"},
+        {"id": "g2", "thread": "t1", "time": "2025-04-01T10:00:00Z", "labels": ["SENT"],
+         "from": "Ben <me@example.com>", "to": "ayse@example.com", "cc": "Can <can@example.com>",
+         "subject": "Re: Robot toplantısı", "snippet": "tamam"},
+        {"id": "g3", "thread": "t2", "time": "2025-04-02T10:00:00Z", "labels": ["SPAM"],
+         "from": "x@example.com", "to": "me@example.com", "subject": "kazandınız", "snippet": "..."},
+    ]
+    (acc / "messages.jsonl").write_text("".join(json.dumps(m) + "\n" for m in msgs))
+    assert gmail.ingest(conn, tmp_path) == {"emails": 2, "skipped": 1}
+    rows = conn.execute("SELECT external_id, kind, title, body, json_extract(payload,'$.direction') "
+                        "FROM event ORDER BY start_utc").fetchall()
+    assert [r[:3] for r in rows] == [("g1", "email", "Robot toplantısı"), ("g2", "email", "Re: Robot toplantısı")]
+    assert rows[0][3] == "Kimden: Ayşe Örnek <ayse@example.com>\nKime: me@example.com\nyarın atölyede"
+    assert [r[4] for r in rows] == ["in", "out"]
+    links = conn.execute("SELECT e.external_id, pa.alias, p.display_name, ep.role FROM event_person ep "
+                         "JOIN event e ON e.id=ep.event_id JOIN person p ON p.id=ep.person_id "
+                         "JOIN person_alias pa ON pa.person_id=p.id ORDER BY 1, 2").fetchall()
+    assert links == [("g1", "ayse@example.com", "Ayşe Örnek", "sender"),
+                     ("g2", "ayse@example.com", "Ayşe Örnek", "recipient"),
+                     ("g2", "can@example.com", "Can", "recipient")]
+    assert search.search(conn, "atolyede")[0]["title"] == "Robot toplantısı"
