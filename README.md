@@ -110,6 +110,13 @@ ajana tek mesajla iş listesi yollar. Ajan her gün için `cfv day YYYY-MM-DD` �
 (takvim + o sırada çekilen foto sayısı, ödevler, notlar, fotolar, WhatsApp, mail, sağlık),
 önceki günlerin raporlarını ve kişisel bağlamı (`data/config/day-context.md`, git dışı) okur.
 
+Hiyerarşi **parça → gün → hafta → ay**; her adım bir alttakinin raporlarını okur, böylece veri
+büyüse de her iş tek bir LLM bağlamına sığar. Bir günün dökümü sınırı (`days.LIMIT`, ~60 bin
+karakter) aşarsa gün 3 saatlik parçalara, bir parça da aşarsa 1 saatliklere bölünür
+(`cfv day <tarih> --plan`). Her parçayı ayrı bir alt ajan özetler; gün ajanı parça özetlerini ve
+günün iskeletini (`--skeleton`: takvim, ödevler, sağlık, sayılar) birleştirir.
+
+- parça: `data/processed/parts/YYYY/YYYY-MM-DD/HH-HH.md`
 - gün: `data/processed/days/YYYY/YYYY-MM-DD.md` (YAML frontmatter + neler oldu, somut
   çıktılar, plan/gerçekleşen, açık işler, bağlantılar, değerlendirme, dönem sinyalleri)
 - hafta: `data/processed/weeks/YYYY/YYYY-Www.md` (o haftanın gün raporlarından)

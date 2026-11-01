@@ -66,7 +66,13 @@ def cmd_search(args):
 def cmd_day(args):
     from cfv import days
     import datetime as dt
-    print(days.dossier(db.connect(args.db), dt.date.fromisoformat(args.date)))
+    conn, d = db.connect(args.db), dt.date.fromisoformat(args.date)
+    if args.plan:
+        parts = days.plan(conn, d)
+        print("\n".join(f"{a:02d}-{b:02d}" for a, b in parts) or "tek parça (sığıyor)")
+        return
+    hours = tuple(int(x) for x in args.hours.split("-")) if args.hours else None
+    print(days.dossier(conn, d, hours=hours, skeleton=args.skeleton))
 
 
 def cmd_review(args):
@@ -115,8 +121,11 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--by-week", action="store_true", help="Sonuçları haftalara grupla")
     p.add_argument("--limit", type=int, default=20)
 
-    p = sub.add_parser("day", help="Bir günün ham dosyasını (gün ajanına giden metin) yazdır")
+    p = sub.add_parser("day", help="Bir günün ham dökümü (gün ajanına giden metin)")
     p.add_argument("date")
+    p.add_argument("--plan", action="store_true", help="Sığmıyorsa hangi saat parçalarına bölündüğü")
+    p.add_argument("--hours", help="Yalnız bu saatler, ör. 9-12 (parça)")
+    p.add_argument("--skeleton", action="store_true", help="Parçalı gün için iskelet (ayrıntısız)")
 
     p = sub.add_parser("review", help="Eksik gün/hafta/ay raporları: list | send (cfv-editor'e gönder)")
     p.add_argument("action", choices=["list", "send"])
