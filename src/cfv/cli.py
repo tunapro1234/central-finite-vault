@@ -17,6 +17,7 @@ SOURCES = {
     "calendar-ios": "calendar_ios",
     "calendar-ics": "calendar_ics",
     "calendar-google": "calendar_gcal",
+    "day-reports": "day_reports",
     "whatsapp": "whatsapp",
     "zepp": "zepp",
 }
@@ -36,6 +37,8 @@ def cmd_ingest(args):
             print(f"[{name}] ATLANDI — ham veri yok: {e}")
             continue
         print(f"[{name}] {time.time() - t:.1f} sn  {json.dumps(stats, ensure_ascii=False)}")
+    from cfv import link
+    print(f"[link] {json.dumps(link.run_all(conn), ensure_ascii=False)}")
 
 
 def cmd_tree(args):
@@ -57,6 +60,22 @@ def cmd_search(args):
             title = h["title"] or ""
             extra = "" if h["snippet"] in ("", title) else f" — {h['snippet']}"
             print(f"{h['local_date']} [{h['kind']}] {title}{extra}")
+
+
+def cmd_day(args):
+    from cfv import days
+    import datetime as dt
+    print(days.dossier(db.connect(args.db), dt.date.fromisoformat(args.date)))
+
+
+def cmd_review(args):
+    from cfv import days
+    print("\n".join(days.jobs()) if args.action == "list" else days.send())
+
+
+def cmd_chart(args):
+    from cfv import chart
+    print(json.dumps(chart.build(db.connect(args.db), args.out), ensure_ascii=False))
 
 
 def cmd_sync(args):
@@ -90,6 +109,15 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--by-week", action="store_true", help="Sonuçları haftalara grupla")
     p.add_argument("--limit", type=int, default=20)
 
+    p = sub.add_parser("day", help="Bir günün ham dosyasını (gün ajanına giden metin) yazdır")
+    p.add_argument("date")
+
+    p = sub.add_parser("review", help="Eksik gün/hafta/ay raporları: list | send (cfv-editor'e gönder)")
+    p.add_argument("action", choices=["list", "send"])
+
+    p = sub.add_parser("chart", help="Haftalık değişken grafiği (data/processed/chart.html)")
+    p.add_argument("--out", type=Path, default=None)
+
     p = sub.add_parser("sync", help="Google Takvim'i data/raw/google-calendar/'a senkronla (salt-okur)")
     p.add_argument("target", choices=["gcal"])
     p.add_argument("--full", action="store_true", help="Değişiklik kontrolünü atla, tam çek")
@@ -107,6 +135,12 @@ def main(argv: list[str] | None = None) -> None:
         cmd_tree(args)
     elif args.cmd == "search":
         cmd_search(args)
+    elif args.cmd == "day":
+        cmd_day(args)
+    elif args.cmd == "review":
+        cmd_review(args)
+    elif args.cmd == "chart":
+        cmd_chart(args)
     elif args.cmd == "sync":
         cmd_sync(args)
 

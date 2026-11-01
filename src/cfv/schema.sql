@@ -145,4 +145,13 @@ END;
 CREATE INDEX IF NOT EXISTS event_person_person ON event_person (person_id);
 CREATE INDEX IF NOT EXISTS media_event ON media (event_id);
 
+-- Olaylar arası türetilmiş bağlar (ör. foto 'photo_at' takvim olayı). cfv.link yeniden üretir.
+CREATE TABLE IF NOT EXISTS event_link (
+    a    INTEGER NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+    b    INTEGER NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    PRIMARY KEY (a, b, kind)
+);
+CREATE INDEX IF NOT EXISTS event_link_b ON event_link (b, kind);
+
 INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '2');

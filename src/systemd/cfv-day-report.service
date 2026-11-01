@@ -1,0 +1,6 @@
+[Unit]
+Description=CFV: eksik gün/hafta/ay raporlarını cfv-editor bp ajanına gönder
+
+[Service]
+Type=oneshot
+ExecStart=/home/tuna/.local/bin/uv run --quiet --directory /home/shared/projects/cfv cfv review send

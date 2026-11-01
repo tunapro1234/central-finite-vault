@@ -67,6 +67,9 @@ def build(conn, out: Path | None = None) -> dict:
             "SELECT event_id, path, role FROM media WHERE role IN ('original','adjusted')"):
         media[eid].append((role, path))
 
+    cal_photos = dict(conn.execute(
+        "SELECT b, count(*) FROM event_link WHERE kind = 'photo_at' GROUP BY b").fetchall())
+
     by_day: dict[dt.date, list] = defaultdict(list)
     for r in rows:
         by_day[dt.date.fromisoformat(r[5])].append(r)
@@ -107,6 +110,9 @@ def build(conn, out: Path | None = None) -> dict:
             k = Counter(r[1] for r in evs)
             wcount.update(k)
             lines += [f"## {TR_DAYS[d.weekday()]} {d.day} {TR_MONTHS[d.month - 1]} {d.year}", ""]
+            rep = db.data_dir() / "processed" / "days" / str(d.year) / f"{d.isoformat()}.md"
+            if rep.exists():
+                lines += [f"📝 [Gün raporu]({rep})", ""]
 
             cal = [r for r in evs if r[1] == "calendar"]
             if cal:
@@ -115,7 +121,8 @@ def build(conn, out: Path | None = None) -> dict:
                     p = json.loads(r[9] or "{}")
                     when = "tüm gün" if p.get("all_day") else _local(r[2], r[4]).strftime("%H:%M")
                     loc = f" — {p['location']}" if p.get("location") else ""
-                    lines.append(f"- {when} {r[7] or '(başlıksız)'}{loc}")
+                    ph = f" · 📷 {cal_photos[r[0]]}" if r[0] in cal_photos else ""
+                    lines.append(f"- {when} {r[7] or '(başlıksız)'}{loc}{ph}")
                 lines.append("")
 
             todos = [r for r in evs if r[1] == "todo" and r[6] != "week"]

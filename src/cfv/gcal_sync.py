@@ -224,6 +224,8 @@ def run(*, force_full=False, allow_mass_removal=False, ingest=True) -> int:
             conn.executescript(db.schema_sql())
             with conn:
                 stats = calendar_gcal.ingest(conn)
+            from cfv import link
+            link.run_all(conn)
             tree.build(conn, data_dir() / "processed" / "timeline")
             conn.close()
             log.info("cfv.sqlite + timeline güncellendi: %s", stats)

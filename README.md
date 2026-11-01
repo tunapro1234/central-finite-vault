@@ -83,6 +83,9 @@ uv run cfv tree                       # data/processed/timeline/ klasör ağacı
 uv run cfv search "taşınma" --by-week # "ne zaman?" → haftalara göre
 uv run cfv search "fatura" --kind todo
 uv run cfv sync gcal [--status]       # Google Takvim senkronu (timer bunu 30 dk'da bir çalıştırır)
+uv run cfv chart                      # data/processed/chart.html — değişkenleri aç/kapa grafik
+uv run cfv day 2026-10-31             # bir günün ham dosyası (gün ajanına giden metin)
+uv run cfv days run [--from --to]     # gün raporları → data/processed/days/YYYY/YYYY-MM-DD.md
 uv run pytest
 ```
 
@@ -97,6 +100,23 @@ uv run pytest
 
 Ay sınırındaki haftalar iki ayda da görünür (her birinde o ayın günleri).
 Ağaç `cfv tree` ile baştan üretilir; elle yapılan değişiklikler kaybolur.
+
+### Gün raporları
+
+Her sabah 05:00'te (`cfv-day-report.timer`) dün ve son 7 günden eksik kalanlar için başsız,
+araçsız bir `claude -p` çağrısı yapılır. Girdi: o günün tüm verisi (takvim + o sırada çekilen
+foto sayısı, ödevler, notlar, fotolar, WhatsApp, mail, sağlık sayıları) + önceki 3 günün
+raporları + kişisel bağlam (`data/config/day-context.md`, git dışı). Çıktı YAML frontmatter'lı
+markdown: özet, neler oldu (kaynaklar birleştirilmiş), somut çıktılar, plan/gerçekleşen,
+açık işler, bağlantılar, dönem sinyalleri. Raporlar `day_report` olarak aranabilir ve haftalık
+README'lerden linklidir. Prompt: `src/cfv/prompts/day.md`. Log: `data/logs/day-reports.log`.
+
+**Not:** gün raporu o günün mesajlarını Claude'a gönderir (Tuna'nın kararı, 2026-11-01).
+
+### Eşleştirme
+
+`cfv.link` takvim olaylarıyla fotoları eşleştirir (`event_link`, `photo_at`): saatli olayın
+süresi içinde ±30 dk çekilen fotolar ve 2-14 günlük tüm-gün olaylarının (gezi, kamp) günleri.
 
 ### MCP
 
