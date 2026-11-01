@@ -56,20 +56,48 @@ Ayrıntılar:
 ## Dizin yapısı
 
 ```
-src/cfv/          kod (schema.sql, db.py, cli.py; ileride ingest/, query.py, mcp/)
-tests/            testler + sentetik fixture'lar
-docs/             belgeler
-data/             KİŞİSEL VERİ — git dışı, chmod 700
-  raw/            ham kaynaklar (dokunma)
-  processed/      cfv.sqlite ve ara çıktılar
+src/cfv/
+  schema.sql        ortak şema (event merkezli) + Türkçe FTS5
+  ingest.py         ortak import katmanı (salt-okur açma, idempotent yazma)
+  sources/          kaynak okuyucular: photos, notes (+ödevler), calendar_ios, calendar_ics,
+                    whatsapp, zepp
+  search.py         temel arama (FTS + haftalara toplama, dönem özeti)
+  tree.py           tarih bazlı klasör ağacı
+  mcp_server.py     Claude için salt-okur MCP
+tests/              testler + sentetik fixture'lar
+docs/               belgeler
+data/               KİŞİSEL VERİ — git dışı, chmod 700
+  raw/              ham kaynaklar (photos ajanı doldurur; dokunma)
+  processed/        cfv.sqlite + timeline/ (tamamen türetilmiş, her an yeniden üretilir)
 ```
 
 ## Kullanım
 
 ```sh
 uv sync
-uv run cfv init-db          # data/processed/cfv.sqlite oluşturur
+uv run cfv ingest all                 # tüm kaynakları içe aktar (~30 sn); tek tek: ingest photos notes ...
+uv run cfv tree                       # data/processed/timeline/ klasör ağacını üret
+uv run cfv search "taşınma" --by-week # "ne zaman?" → haftalara göre
+uv run cfv search "fatura" --kind todo
 uv run pytest
 ```
 
-`CFV_DATA` ortam değişkeni veri kökünü değiştirir (varsayılan: `<repo>/data`).
+### Klasör ağacı
+
+`data/processed/timeline/2025/09-Eylül/W38 (15-21)/`
+- `README.md` — gün gün: takvim, ödevler (tikli), notlar, Zepp (adım/uyku/egzersiz),
+  fotoğraf sayısı + kişiler + yer, WhatsApp özeti
+- `whatsapp.md` — haftanın mesajları (gün > sohbet)
+- `notlar/` — o hafta oluşturulan notlar (markdown)
+- `fotolar/` — `~/Pictures/icloud-sync` dosyalarına **sembolik link** (kopya yok)
+
+Ay sınırındaki haftalar iki ayda da görünür (her birinde o ayın günleri).
+Ağaç `cfv tree` ile baştan üretilir; elle yapılan değişiklikler kaybolur.
+
+### MCP
+
+Repo kökündeki `.mcp.json` `cfv` sunucusunu tanımlar (bu klasörde açılan Claude oturumları
+görür). Araçlar: `when`, `search`, `timeline`, `digest`, `week_page`, `people`, `photos`.
+Sunucu veritabanını salt-okur açar.
+
+`CFV_DATA` veri kökünü, `CFV_PHOTO_LIBRARY` foto kütüphanesini değiştirir.

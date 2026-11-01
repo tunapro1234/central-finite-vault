@@ -1,30 +1,38 @@
-# Yol haritası (öneri — Tuna onayı bekliyor)
+# Yol haritası
 
 ## Faz 0 — Temel ✅ (2026-11-01)
-Repo iskeleti, `.gitignore`, uv/pyproject, README, veri manifestosu, şema taslağı v0,
-`cfv init-db`, sentetik şema testi.
+Repo iskeleti, `.gitignore`, uv/pyproject, README, veri manifestosu, şema, sentetik testler.
 
-## Faz 1 — Fotolar + kişiler (veri hazır)
-- `ingest/photos.py`: Photos.sqlite'ı `immutable=1` ile aç → `photo`/`video` event'leri,
-  `person` + `person_alias` (ZPERSON), `event_person` (ZDETECTEDFACE).
-- `ingest/icloud_files.py`: `~/Pictures/icloud-sync` taraması → `media`; asset ↔ dosya
-  eşleme (orijinal ad + zaman). Eşleşmeyenler için rapor (`data/processed/reports/`).
-- Çıktı: "X kişisinin olduğu, şu aralıktaki fotolar" sorgusu çalışır.
+## Faz 1 — İlk kaynaklar + temel arama ✅ (2026-11-01)
+- Okuyucular (`src/cfv/sources/`): `photos` (Photos.sqlite + icloud-sync eşleme),
+  `notes` (protobuf çözücü + **ödev ayrıştırıcı**: hafta/gün/bölüm/tik), `calendar_ios`,
+  `calendar_ics` (Google için), `whatsapp`, `zepp` (adım/PAI, uyku, egzersiz).
+- `cfv tree` → `data/processed/timeline/YYYY/AA-Ay/Wnn (gg-gg)/` (README + whatsapp.md +
+  notlar/ + fotolar/ sembolik linkleri).
+- Temel arama: FTS5 (Türkçe katlama, önek), `when` = eşleşmeleri haftalara toplama.
+- MCP (`cfv-mcp`, salt-okur): `when`, `search`, `timeline`, `digest`, `week_page`, `people`, `photos`.
 
-## Faz 2 — iPhone yedeği (yedek bitince)
-- `ingest/backup.py`: Manifest.db üzerinden domain/relativePath → hash'li dosya çözümü.
-- Notlar (NoteStore protobuf → düz metin), Takvim, MediaLibrary (parça meta), Contacts.
+## Faz 2 — Anlamsal (vektör) arama ← SIRADAKİ
+Hedef: ajanlar "ne zaman şu işle uğraştım?" sorusunu kelime tutmasa da anlamla bulsun.
+- **Yerel** embedding modeli (çok dilli, Türkçe iyi: bge-m3 / multilingual-e5 sınıfı), GPU'da.
+  Hiçbir metin dışarı gitmez.
+- **Parçalama (chunk)**: tek tek WhatsApp mesajı anlamsız → sohbet başına zaman pencereleri
+  (ör. 30 dk sessizlikle bölünen konuşma dilimleri); ödevler gün başına; not paragrafları;
+  takvim olayı tek parça; fotolar için kişi+yer+albüm (+ ileride Apple sahne etiketleri/OCR).
+- Şema: `chunk(id, kind, start_utc, end_utc, local_date, text, event_ids)` +
+  `chunk_vec` (sqlite-vec). İlişkisel kalır; vektör sadece ek bir indeks.
+- Arama: hibrit = FTS (bm25) + vektör (kosinüs) → RRF birleştirme → haftalara toplama.
+- MCP: `semantic_search(query, start?, end?, kinds?)` + `when` hibrit moda geçer.
+- Oynama alanı: model/parça boyu karşılaştırma için küçük bir değerlendirme seti
+  (Tuna'nın gerçek soruları + beklenen haftalar).
 
-## Faz 3 — İlk MCP (salt-okur)
-Araçlar: `timeline(start, end, kinds)`, `period_digest(start, end)` (fotolar+kişiler,
-top müzik, takvim, notlar), `search(text)`, `photos_with(person, ...)`,
-`top_tracks(start, end)`. Fotoğraf dosyasını Claude'a yalnızca açık istekle verir
-(küçültülmüş). → **Instagram postu senaryosu burada çalışır.**
+## Faz 3 — Daha fazla kaynak
+- Google Calendar (Takeout .ics ya da vdirsyncer) — okuyucu hazır.
+- Apple Music Play Activity (privacy.apple.com), Snapchat, BeReal, YouTube (Takeout JSON).
+- Yedekte duran ama henüz alınmayanlar: SMS/iMessage, Kişiler (person birleştirme için),
+  Anımsatıcılar, Apple foto arama indeksi `psi.sqlite` (sahne etiketi, OCR, yer adları).
 
-## Faz 4 — Dış exportlar (geldikçe)
-Apple Music Play Activity → Snapchat → BeReal → YouTube. Her biri tek bir
-`ingest/<kaynak>.py` + sentetik fixture testi.
-
-## Faz 5 — Zenginleştirme (sonra)
-Kişi birleştirme önerileri, yer kümeleme/ters geocoding (yerel), Immich entegrasyonu
-(Tuna kararına bağlı), dönem otomatik "anı" önerileri.
+## Faz 4 — Zenginleştirme
+- Kişi birleştirme: Photos adı ↔ WhatsApp ↔ Kişiler (öneri üret, onayı Tuna verir).
+- Yer kümeleme / yerel ters geocoding; Immich (Tuna kararına bağlı; CLIP ile görsel arama).
+- Instagram postu akışı: dönem → aday fotolar + o dönemin müziği + takvim + notlar.

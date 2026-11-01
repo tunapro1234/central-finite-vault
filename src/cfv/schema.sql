@@ -1,4 +1,4 @@
--- CFV ortak şema — TASLAK v0 (2026-11-01)
+-- CFV ortak şema — v1 (2026-11-01)
 -- Tek zaman çizelgesi: her kaynaktaki her kayıt bir `event`.
 -- Kaynağa özgü ayrıntı `payload` (JSON) içinde; ortak alanlar kolon.
 -- Bu DB data/raw'dan HER ZAMAN yeniden üretilebilir olmalı (raw = gerçek kaynak).
@@ -31,7 +31,8 @@ CREATE TABLE IF NOT EXISTS event (
     start_utc    TEXT NOT NULL,           -- ISO-8601 UTC ('2024-07-14T18:03:22Z')
     end_utc      TEXT,                    -- süre varsa (takvim, dinleme)
     tz_offset_min INTEGER,                -- çekildiği/yaşandığı yerel saat farkı (biliniyorsa)
-    time_quality TEXT NOT NULL DEFAULT 'exact', -- 'exact' | 'day' | 'approx' (export yalnızca gün veriyorsa)
+    local_date   TEXT NOT NULL,           -- yerel gün 'YYYY-MM-DD' (klasörleme/gruplama anahtarı)
+    time_quality TEXT NOT NULL DEFAULT 'exact', -- 'exact' | 'day' | 'week' | 'approx'
     title        TEXT,
     body         TEXT,                    -- not metni, takvim açıklaması vb. (FTS'e girer)
     lat          REAL,
@@ -42,6 +43,7 @@ CREATE TABLE IF NOT EXISTS event (
 );
 CREATE INDEX IF NOT EXISTS event_time ON event (start_utc);
 CREATE INDEX IF NOT EXISTS event_kind_time ON event (kind, start_utc);
+CREATE INDEX IF NOT EXISTS event_day ON event (local_date);
 
 -- Diskteki dosyalar (fotoğraf/video kendisi KOPYALANMAZ; yol + hash tutulur).
 CREATE TABLE IF NOT EXISTS media (
@@ -68,7 +70,8 @@ CREATE TABLE IF NOT EXISTS person (
 CREATE TABLE IF NOT EXISTS person_alias (
     person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
     source_kind TEXT NOT NULL,            -- 'iphone-photos', 'snapchat', 'contacts', ...
-    alias     TEXT NOT NULL,              -- kaynaktaki ad/kimlik (ZPERSON.ZPERSONUUID, kullanıcı adı ...)
+    alias     TEXT NOT NULL,              -- kaynaktaki kimlik (ZPERSON.ZPERSONUUID, WhatsApp JID ...)
+    name      TEXT,                       -- kaynaktaki görünen ad
     PRIMARY KEY (source_kind, alias)
 );
 
@@ -115,6 +118,7 @@ CREATE TABLE IF NOT EXISTS tag (
 -- Tam metin arama (notlar, takvim başlıkları, video başlıkları ...).
 -- unicode61 Türkçe ı/İ'yi i'ye katlamaz → triggerlar metni katlayarak yazar;
 -- sorgular da cfv.db.fold_tr() ile katlanmalı. Contentless: gösterim için event'e JOIN.
+-- WhatsApp'ta title = sohbet adı; her mesajı sohbet adıyla eşleştirmesin diye indekslenmez.
 CREATE VIRTUAL TABLE IF NOT EXISTS event_fts USING fts5(
     title, body, content='', contentless_delete=1,
     tokenize='unicode61 remove_diacritics 2'
@@ -122,7 +126,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS event_fts USING fts5(
 CREATE TRIGGER IF NOT EXISTS event_ai AFTER INSERT ON event BEGIN
     INSERT INTO event_fts(rowid, title, body) VALUES (
         new.id,
-        replace(replace(new.title, 'ı', 'i'), 'İ', 'i'),
+        CASE WHEN new.kind = 'whatsapp' THEN NULL
+             ELSE replace(replace(new.title, 'ı', 'i'), 'İ', 'i') END,
         replace(replace(new.body,  'ı', 'i'), 'İ', 'i'));
 END;
 CREATE TRIGGER IF NOT EXISTS event_ad AFTER DELETE ON event BEGIN
@@ -132,8 +137,12 @@ CREATE TRIGGER IF NOT EXISTS event_au AFTER UPDATE OF title, body ON event BEGIN
     DELETE FROM event_fts WHERE rowid = old.id;
     INSERT INTO event_fts(rowid, title, body) VALUES (
         new.id,
-        replace(replace(new.title, 'ı', 'i'), 'İ', 'i'),
+        CASE WHEN new.kind = 'whatsapp' THEN NULL
+             ELSE replace(replace(new.title, 'ı', 'i'), 'İ', 'i') END,
         replace(replace(new.body,  'ı', 'i'), 'İ', 'i'));
 END;
 
-INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '0');
+CREATE INDEX IF NOT EXISTS event_person_person ON event_person (person_id);
+CREATE INDEX IF NOT EXISTS media_event ON media (event_id);
+
+INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '2');

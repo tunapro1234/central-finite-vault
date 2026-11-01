@@ -4,10 +4,15 @@ version = "0.0.1"
 description = "Central Finite Vault — kişisel hayat verisi için yerel zaman çizelgesi + MCP"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "icalendar>=7.3.0",
+    "mcp>=2.3.0",
+    "recurring-ical-events>=3.8.2",
+]
 
 [project.scripts]
 cfv = "cfv.cli:main"
+cfv-mcp = "cfv.mcp_server:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

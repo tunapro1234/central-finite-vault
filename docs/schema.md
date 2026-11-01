@@ -1,4 +1,4 @@
-# Ortak şema — taslak v0
+# Ortak şema — v2
 
 Kaynak: [`src/cfv/schema.sql`](../src/cfv/schema.sql). Bu belge *neden*i ve kaynak
 eşlemesini anlatır.
@@ -39,18 +39,22 @@ person 1─* person_alias            (kaynaklar arası aynı insan)
 - `start_utc`/`end_utc`: ISO-8601 UTC, `Z` sonekli. Lexicographic sıralama = zaman sıralaması.
 - `tz_offset_min`: olayın yerel saat farkı (fotoğraf EXIF'i, takvim tz'si). "O gün" sorguları
   yerel güne göre yapılmalı.
-- `time_quality`: `exact` | `day` (export yalnızca gün veriyor, örn. günlük müzik özeti) | `approx`.
+- `time_quality`: `exact` | `day` (tüm gün / günlük özet) | `week` (günü belirsiz ödev) | `approx`.
+- `local_date`: olayın yerel günü; klasörleme ve tarih süzgeçleri bunu kullanır.
 - Apple Core Data zamanı: `unix = coredata + 978307200`.
 
 ## Kaynak → event eşlemesi (taslak)
 
 | Kaynak | `kind` | `external_id` | Ortak alanlar | `payload` örnekleri |
 |--------|--------|---------------|---------------|---------------------|
-| Photos.sqlite ZASSET | `photo` / `video` | `ZUUID` | ZDATECREATED, ZLATITUDE/ZLONGITUDE, kişiler ← ZDETECTEDFACE→ZPERSON | favori, gizli, albümler, sahne etiketleri |
+| Photos.sqlite ZASSET | `photo` / `video` | `ZUUID` | ZDATECREATED, ZLATITUDE/ZLONGITUDE, kişiler ← ZDETECTEDFACE→ZPERSON (birleştirmeler çözülür) | moment (yer), albümler; etiket: favorite/hidden/screenshot/live |
 | icloud-sync dosyası | (photo event'ine `media`) | — | yol, hash | XMP alanları |
-| NoteStore | `note` | note `ZIDENTIFIER` | oluşturma zamanı, title, body | klasör, değiştirilme zamanı |
+| NoteStore | `note` | note `ZIDENTIFIER` | oluşturma zamanı, title, body (markdown) | klasör, değiştirilme zamanı |
+| NoteStore "Ödevler YYYY" | `todo` | hash(not, hafta, gün, metin, sıra) | hafta+gün → `local_date` (`time_quality` day/week), title = madde | done, week, weekday, section |
 | Calendar.sqlitedb | `calendar` | etkinlik UUID | başlangıç/bitiş, title, konum | takvim adı, tekrar kuralı |
 | Apple Music Play Activity | `play` | (zaman+parça hash'i) | zaman, süre → `event_track` | end reason (skip/tam), cihaz |
+| WhatsApp ChatStorage | `whatsapp` | sohbet JID / stanza id | zaman, title = sohbet adı (FTS'e girmez), body = metin | sender, from_me, chat_type, type |
+| Zepp | `zepp_day` / `sleep` / `workout` | `day/…`, `sleep/…`, `workout/…` | gün / uyku aralığı / egzersiz aralığı | adım, PAI, nabız; uyku evreleri; spor türü |
 | Snapchat | `snap` / `chat` / `memory` | export kimliği | zaman, karşı taraf → `event_person` | medya türü |
 | BeReal | `bereal` | post id | zaman, konum, medya ×2 | geç mi, retake sayısı |
 | YouTube | `youtube_watch` | (zaman+url hash'i) | zaman, title | kanal, url |

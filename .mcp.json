@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "cfv": {
+      "command": "uv",
+      "args": ["run", "--quiet", "--directory", "/home/shared/projects/cfv", "cfv-mcp"]
+    }
+  }
+}

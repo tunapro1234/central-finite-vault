@@ -12,8 +12,8 @@ def test_schema_roundtrip(tmp_path):
         "('test', 'raw/test.json', '2026-01-01T00:00:00Z', 'test')"
     )
     conn.execute(
-        "INSERT INTO event (source_id, external_id, kind, start_utc, title, body) VALUES "
-        "(1, 'e1', 'note', '2025-06-01T12:00:00Z', 'Örnek not', 'deniz kenarında kahvaltı')"
+        "INSERT INTO event (source_id, external_id, kind, start_utc, local_date, title, body) VALUES "
+        "(1, 'e1', 'note', '2025-06-01T12:00:00Z', '2025-06-01', 'Örnek not', 'deniz kenarında kahvaltı')"
     )
     conn.execute("INSERT INTO person (display_name) VALUES ('Örnek Kişi')")
     conn.execute("INSERT INTO event_person VALUES (1, 1, 'mentioned', 1.0)")

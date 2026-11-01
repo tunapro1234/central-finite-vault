@@ -8,23 +8,27 @@ Durum anahtarı: ⬜ bekleniyor · 🟨 kısmi/sürüyor · 🟩 ham veri hazır
 
 | # | Kaynak | Yer | Format | Çıkacak olan | Durum |
 |---|--------|-----|--------|--------------|-------|
-| 1 | iPhone Photos kütüphanesi DB | `raw/iphone/photos-db-2026-11-01/Photos.sqlite` | SQLite (Core Data), 1.1 GB | asset zamanı/konumu, orijinal dosya adı, yüz → kişi | 🟩 (28.602 asset, 218 isimli kişi, 34.599 yüz) |
-| 2 | Foto/video dosyaları | `~/Pictures/icloud-sync/YYYY/AA/` (data/ dışında) | HEIC/JPG/MOV + XMP sidecar | `media` satırları (yol, hash, boyut) | 🟨 icloudpd ~%87 (photos ajanı yönetir) |
+| 1 | iPhone Photos kütüphanesi DB | `raw/iphone/photos-db-2026-11-01/Photos.sqlite` | SQLite (Core Data), 1.1 GB | asset zamanı/konumu, orijinal dosya adı, yüz → kişi, albüm, moment (yer adı) | ✅ `cfv ingest photos` — 28.596 event, 108 kişi |
+| 2 | Foto/video dosyaları | `~/Pictures/icloud-sync/YYYY/AA/` (data/ dışında) | HEIC/JPG/MOV + XMP sidecar | `media` satırları (yol, rol) | ✅ 18.253 asset dosyasına bağlı (+adjusted/live/alt); 🟨 icloudpd hâlâ iniyor (2022/09 öncesi + videolar) |
 | 3 | iPhone tam yedeği (şifresiz) | `raw/iphone/backup/<UDID>/` | idevicebackup2 (Manifest.db + hash'li dosyalar), 22 GB, 78.195 dosya | aşağıdaki 3a–3d (+ mesajlar, arama geçmişi, uygulama verileri) | 🟩 |
-| 3a | ↳ iCloud Notlar | `raw/iphone/extract-2026-11-01/AppDomainGroup-group.com.apple.notes/NoteStore.sqlite` | SQLite; gövde `ZICNOTEDATA.ZDATA` gzip'li protobuf | 54 not (2018-12 → 2026-10); başlık, metin, zamanlar, klasör | 🟩 (sayı az görünüyor → privacy exportuyla karşılaştır) |
-| 3b | ↳ Takvim | `raw/iphone/extract-2026-11-01/HomeDomain/Library/Calendar/Calendar.sqlitedb` | SQLite | 263 olay (İş, Aile, iCloud, Zepp, MHRS, doğum günleri…) | 🟩 |
+| 3a | ↳ iCloud Notlar | `raw/iphone/extract-2026-11-01/AppDomainGroup-group.com.apple.notes/NoteStore.sqlite` | SQLite; gövde `ZICNOTEDATA.ZDATA` gzip'li protobuf | 54 not (2018-12 → 2026-10); başlık, metin, zamanlar, klasör | ✅ 35 dolu not; 5 "Ödevler" notundan 4.884 `todo` (2023-W44 →) — sayı az görünüyor → privacy exportuyla karşılaştır |
+| 3b | ↳ Takvim | `raw/iphone/extract-2026-11-01/HomeDomain/Library/Calendar/Calendar.sqlitedb` | SQLite | iCloud takvimleri, Found in Mail, anımsatıcılar (doğum günü + tatiller atlanır). **Ana takvim Google** → #8 | ✅ 91 event |
 | 3c | ↳ Müzik kütüphanesi | `raw/iphone/afc-2026-11-01/iTunes_Control/iTunes/MediaLibrary.sqlitedb` | SQLite | 4.019 parça (2.614 çalınmış): `item_stats` çalma/skip sayısı, son çalma, beğeni (geçmiş YOK) | 🟩 |
 | 3d | ↳ Kişiler (Contacts) | `raw/iphone/extract-2026-11-01/HomeDomain/Library/AddressBook/AddressBook.sqlitedb` | SQLite | 826 kişi → `person_alias` eşleşmesine yardım | 🟩 |
 | 3f | ↳ SMS/iMessage | `raw/iphone/extract-2026-11-01/HomeDomain/Library/SMS/sms.db` | SQLite | 8.284 mesaj (2021-02'den), karşı taraf | 🟩 |
-| 3g | ↳ WhatsApp (Business) | `raw/iphone/extract-2026-11-01/AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared/ChatStorage.sqlite` | SQLite + `Message/Media/` | 317.692 mesaj (2018-06'dan) | 🟩 |
-| 3h | ↳ Zepp/Amazfit saat | `raw/iphone/extract-2026-11-01/AppDomain-com.huami.watch/Documents/*/` | SQLite (`com.zepp.phn.sqlite`, `HMDBFirstBeatDataBaseV2.sqlite`, `Insight.sqlite`) | uyku, nabız, adım, egzersiz | 🟩 |
-| 3i | ↳ Sesli notlar | `raw/iphone/extract-2026-11-01/AppDomainGroup-group.com.apple.VoiceMemos.shared/Recordings/` | m4a | 4 kayıt | 🟩 |
+| 3g | ↳ WhatsApp (Business) | `raw/iphone/extract-2026-11-01/AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared/ChatStorage.sqlite` | SQLite + `Message/Media/` | 317.692 mesaj (2018-06'dan) | ✅ 313.172 mesaj (sistem mesajları + durumlar hariç), 9.456 ek dosya bağlı |
+| 3h | ↳ Zepp/Amazfit saat | `raw/iphone/extract-2026-11-01/AppDomain-com.huami.watch/Documents/*/` | SQLite (`HMCorePersistanceDatabaseV1`, `healthMatrix`, `HMDBFirstBeatDataBaseV2`) | günlük adım/PAI/nabız, uyku, egzersiz | ✅ 520 gün, 359 gece, 42 egzersiz |
 | 3j | ↳ Instagram ekran süresi | `raw/iphone/extract-2026-11-01/AppDomain-com.burbn.instagram/Documents/time_in_app_*.db` | SQLite | uygulamada geçen süre | 🟩 |
 | 3e | Cihaz içi foto indeksleri (AFC dökümü) | `raw/iphone/afc-2026-11-01/PhotoData/Caches/…`, `MediaAnalysis/mediaanalysis.db` | SQLite | `psi.sqlite`: sahne etiketi, OCR, yer adı; `CLSLocationCache`: konum → yer adı; estetik skorları | 🟩 |
 | 4 | Apple Music Play Activity | privacy.apple.com export → `raw/apple-privacy/` | CSV (`Apple Music - Play History Daily Tracks` / `Play Activity`) | her dinleme: zaman, parça, süre | ⬜ Tuna talep edecek |
 | 5 | Snapchat My Data | `raw/snapchat/` | ZIP → JSON/HTML (memories_history, chat_history, ...) | memory'ler, snap/sohbet zamanları, karşı taraf | ⬜ Tuna talep edecek |
 | 6 | BeReal GDPR | `raw/bereal/` | ZIP → JSON + görseller | her BeReal: zaman, ön/arka foto, konum | ⬜ Tuna talep edecek |
+| 8 | **Google Calendar** (ana takvim) | `raw/google-takeout/**/Calendar/*.ics` veya `raw/calendar/**/*.ics` | iCalendar | tüm etkinlikler, tekrarlar açılır | ⬜ okuyucu hazır (`cfv ingest calendar-ics`), veri bekleniyor |
 | 7 | Google Takeout — YouTube | `raw/google-takeout/` | `watch-history.json` (JSON seç, HTML değil) | izleme zamanı, video başlığı, kanal | ⬜ Tuna talep edecek |
+
+## Kapsam dışı
+
+- Sesli notlar (Tuna, 2026-11-01: "kaldır") — ham veride durur, import edilmez.
 
 ## Notlar / bilinen kısıtlar
 
@@ -47,3 +51,4 @@ Durum anahtarı: ⬜ bekleniyor · 🟨 kısmi/sürüyor · 🟩 ham veri hazır
 - 2026-11-01 — manifest oluşturuldu (Photos.sqlite hazır, yedek sürüyor).
 - 2026-11-01 — yedek tamamlandı (22 GB), AFC dökümleri eklendi. Ayrıntılı ham envanter: `data/raw/README.md` (photos ajanı). Takvim kaynağı (yedek mi, iCloud/Google + vdirsyncer mi) henüz kararlaştırılmadı.
 - 2026-11-01 — yedekten çıkarılan ağaç (`extract-2026-11-01/`) eklendi: notlar, takvim, kişiler, SMS, WhatsApp, Zepp, sesli notlar.
+- 2026-11-01 — ilk importlar: fotolar, notlar+ödevler, iOS takvim, WhatsApp, Zepp. Takvimin ana kaynağı Google (Takeout/vdirsyncer bekleniyor). Sesli notlar kapsam dışı.
