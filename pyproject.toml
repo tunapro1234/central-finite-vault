@@ -1,0 +1,23 @@
+[project]
+name = "cfv"
+version = "0.0.1"
+description = "Central Finite Vault — kişisel hayat verisi için yerel zaman çizelgesi + MCP"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+cfv = "cfv.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cfv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
