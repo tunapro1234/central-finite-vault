@@ -8,7 +8,10 @@ Paketteki her medya için:
 2. Karttaki bilgileri kullan: zaman, yer, albüm (WhatsApp = gelen/kaydedilen resim olabilir),
    kişiler ve Tuna'nın onlar hakkındaki notu, o günün takvimi. Kişi bilgisi gerekirse
    `data/config/people.md`'ye bakabilirsin. Kişiler yüz tanımadan gelir; yanlış olabilir, görüntüyle
-   çelişiyorsa söyle.
+   çelişiyorsa söyle. `Sinyaller:` satırı Tuna'nın davranışından gelir ve güçlü ipucudur:
+   favoriye almış, aynı görüntüyü uzun süre boyunca galeride tekrar tekrar saklamış (çok kopya,
+   geniş gün aralığı), WhatsApp'ta birilerine göndermiş, gelen resme gülmüş. Bunları `onem` ve
+   `ikoniklik`te hesaba kat (yakın tarihli birkaç kopya ise sadece seri çekimdir, önemsiz).
 3. Önce düşün, sonra puanla. Tek JSON nesnesini `Yaz:` yoluna Write ile kaydet:
 
 ```json

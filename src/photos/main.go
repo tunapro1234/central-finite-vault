@@ -1,6 +1,8 @@
 // photos: her fotoğraf/videoyu bir LLM'e (Haiku) değerlendirtmek için paket hazırlar.
 //
 //	photos next <işçi> <işçi sayısı> [n]   değerlendirilmemiş n (25) medya → paket dosyası, yolunu yazar
+//	photos signals                        favori/kopya/WhatsApp sinyalleri → signals.json
+//	photos score                          LLM puanı + sinyal bonusu → scores.tsv (yüksekten düşüğe)
 //	photos status                         kaç medya var, kaçı değerlendirildi
 //
 // Paket: her medya için küçük JPEG (video: 6 kare) + bilgi kartı. Değerlendirme
@@ -133,7 +135,7 @@ func next(db *sql.DB, worker, of, n int) {
 	for _, d := range []string{"thumbs", "eval", "batches"} {
 		check(os.MkdirAll(filepath.Join(out, d), 0o700))
 	}
-	who := notes()
+	who, sigs := notes(), loadSignals()
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Paket (%d medya) — talimat: src/photos/rate.md\n\n", len(items))
 	for _, it := range items {
@@ -164,6 +166,9 @@ func next(db *sql.DB, worker, of, n int) {
 		if len(ppl) > 0 {
 			fmt.Fprintf(&b, "Kişiler (iCloud yüz tanıma): %s\n", strings.Join(ppl, "; "))
 		}
+		if l := sigs[it.key].line(); l != "" {
+			fmt.Fprintf(&b, "Sinyaller: %s\n", l)
+		}
 		cnt := strs(db, `SELECT count(*) FROM event WHERE kind IN ('photo','video') AND local_date = ?`, it.day)
 		cal := strs(db, `SELECT title FROM event WHERE kind = 'calendar' AND local_date = ? LIMIT 8`, it.day)
 		fmt.Fprintf(&b, "O gün: %s foto/video", cnt[0])
@@ -191,6 +196,10 @@ func main() {
 	switch c := append(os.Args, "")[1]; c {
 	case "next":
 		next(db, arg(2, 0), arg(3, 1), arg(4, 25))
+	case "signals":
+		signals(db)
+	case "score":
+		score(db)
 	case "status":
 		var all, onDisk, done int
 		rows, err := db.Query(`SELECT external_id, path FROM (` + media + `)`)
@@ -209,6 +218,6 @@ func main() {
 		}
 		fmt.Printf("medya %d, diskte %d, değerlendirilen %d\n", all, onDisk, done)
 	default:
-		check(fmt.Errorf("kullanım: photos next <işçi> <sayı> [n] | status"))
+		check(fmt.Errorf("kullanım: photos next <işçi> <sayı> [n] | signals | score | status"))
 	}
 }

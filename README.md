@@ -86,7 +86,7 @@ uv run cfv sync gcal [--status]       # Google Takvim senkronu (timer bunu 30 dk
 uv run cfv sync gmail                 # Gmail senkronu (başlık + snippet)
 uv run cfv chart                      # data/processed/chart.html — değişkenleri aç/kapa grafik
 ./bin/compact jobs | input <düğüm>   # hiyerarşik raporlar (Go; aşağıda)
-./bin/photos next <k> <N> | status   # foto değerlendirme paketleri (Haiku işçileri; src/photos/worker.md)
+./bin/photos next <k> <N> | signals | score | status   # foto değerlendirme paketleri (Haiku işçileri; src/photos/worker.md)
 uv run pytest
 ```
 
@@ -138,6 +138,27 @@ Raporları bp ajanı `cfv-editor` yazar (`src/compact/editor.md`); her düğüm�
 ajana verir. Biçim: `src/compact/report.md`. `uv run cfv ingest reports` raporları aranabilir
 yapar; zaman çizelgesinde her gün kendisini kapsayan en derin rapora linklidir.
 `cfv-day-report.timer` (05:00, `compact send`) şimdilik kapalı.
+
+### Fotoğraf puanı
+
+Her foto/video bir LLM'e (bp Haiku işçileri, `src/photos/worker.md`) tek tek gösterilir. Kart:
+zaman, yer, albüm, yüz tanımadaki kişiler + `data/config/people.md` notları, o günün takvimi ve
+davranış sinyalleri. LLM önce gerekçesini (düşünce izi) yazar, sonra `kalite`, `ikoniklik`,
+`onem`, `insta` (1-10) verir → `data/processed/photos/eval/<asset UUID>.json`.
+
+Sinyaller (`./bin/photos signals`, Tuna'nın davranışından; Fotoğraflar/WhatsApp verisi veri
+ajanının `photos-meta.sqlite` çıkarımından):
+- **favori** +1.5; art arda ≥20 favorinin içindeyse yarısı (toplu yanlış favorileme)
+- **kopya**: aynı görüntü (256 bit dHash, Hamming ≤24; ekran görüntüleri hariç) galeride kaç kez
+  var. İlk-son kopya arası ≥30 gün ise her ek kopya +0.5 (en çok +2); yakın tarihli kopyalar seri
+  çekimdir, belge/ekran görüntüsü kopyaları sayılmaz
+- **açma/paylaşma**: log2(1+açılma)/4 (en çok +1.5), paylaşma başına +0.5 (en çok +1)
+- **elle emek**: açıklama yazdın +1, kendi Anı'na koydun +1, düzenledin +0.5; Apple öne çıkardı +0.5
+- **WhatsApp**: gönderdiğin her sohbet +0.5 (en çok +1.5), gönderdiğinde aldığı her tepki +0.25
+  (en çok +1); sana geldiğinde tepki verdin ya da 10 dk içinde güldün (😂, haha, jsjs…) +0.5 (en çok +1)
+
+`puan = (onem + ikoniklik + insta) / 3 + sinyal bonusu` → `./bin/photos score` →
+`data/processed/photos/scores.tsv` (yüksekten düşüğe).
 
 ### Eşleştirme
 
