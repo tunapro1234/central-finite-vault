@@ -48,6 +48,7 @@ type sig struct {
 	Edited   bool     `json:"duzenlendi,omitempty"`
 	MyMemory bool     `json:"kendi_anin,omitempty"`
 	Featured bool     `json:"apple_one_cikardi,omitempty"`
+	Sticker  int      `json:"sticker,omitempty"` // bu fotodan yapılmış stickerı kaç kez gönderdin (+1 = yapılmış)
 }
 
 // line: kart için tek satır
@@ -67,6 +68,7 @@ func (s sig) line() string {
 	add(s.Edited, "düzenledin")
 	add(s.MyMemory, "kendi oluşturduğun bir Anı'da")
 	add(s.Featured, "Apple öne çıkanlara seçti")
+	add(s.Sticker > 0, "bundan sticker yapılmış, %d kez gönderdin", s.Sticker-1)
 	add(len(s.SentTo) > 0, "WhatsApp'ta gönderdin: %s", strings.Join(s.SentTo, ", "))
 	add(s.Reacts > 0, "gönderdiğinde %d tepki aldı", s.Reacts)
 	add(len(s.From) > 0, "WhatsApp'ta geldi: %s", strings.Join(s.From, ", "))
@@ -85,6 +87,9 @@ func (s sig) bonus() float64 {
 	b += map[bool]float64{true: 1}[s.Caption] + map[bool]float64{true: 0.5}[s.Edited]
 	b += map[bool]float64{true: 1}[s.MyMemory] + map[bool]float64{true: 0.5}[s.Featured]
 	b += min(1.5, 0.5*float64(len(s.SentTo))) + min(1, 0.25*float64(s.Reacts))
+	if s.Sticker > 0 { // sticker yapılan fotolar genelde ikoniktir
+		b += 1.5 + min(1, float64(s.Sticker-1)/10)
+	}
 	return b + min(1, 0.5*float64(s.Laughed+len([]rune(s.MyReacts))))
 }
 
@@ -352,6 +357,17 @@ func signals(db *sql.DB) {
 			s.SentTo, s.From, s.Laughed, s.MyReacts, s.Reacts = keys(sent), keys(from), min(laughed, 3), myr, their
 		}
 	}
+	for _, st := range loadStickers() { // eşleşme: Haiku doğruladıysa ya da benzerlik ≥0.95
+		var ev struct {
+			Src *bool `json:"kaynak_foto"`
+		}
+		if b, err := os.ReadFile(evalFile(st.key)); err == nil {
+			json.Unmarshal(b, &ev)
+		}
+		if st.Photo != "" && (ev.Src != nil && *ev.Src || ev.Src == nil && st.Sim >= 0.95) {
+			get(st.Photo).Sticker += 1 + st.Sent
+		}
+	}
 	for k, s := range res {
 		if s.line() == "" {
 			delete(res, k)
@@ -433,4 +449,63 @@ func score(db *sql.DB) {
 	}
 	check(os.WriteFile(filepath.Join(out, "scores.tsv"), []byte(b.String()), 0o600))
 	fmt.Printf("%d foto puanlandı → %s\n", len(rs), filepath.Join(out, "scores.tsv"))
+}
+
+// sticker: embed.py stickers çıktısı (data/processed/photos/stickers.json)
+type sticker struct {
+	Path     string         `json:"yol"`
+	Sent     int            `json:"gonderdin"`
+	Got      int            `json:"geldi"`
+	Chats    map[string]int `json:"sohbetler"`
+	First    string         `json:"ilk"`
+	Last     string         `json:"son"`
+	Photo    string         `json:"foto"`
+	Sim      float64        `json:"benzerlik"`
+	key      string
+	smallImg string
+}
+
+func loadStickers() []sticker {
+	var m map[string]sticker
+	b, err := os.ReadFile(filepath.Join(out, "stickers.json"))
+	if err != nil || json.Unmarshal(b, &m) != nil {
+		return nil
+	}
+	var r []sticker
+	for k, s := range m {
+		s.key = k
+		s.smallImg, _ = filepath.Abs(filepath.Join(out, "small", k+".jpg"))
+		r = append(r, s)
+	}
+	sort.Slice(r, func(i, j int) bool { return r[i].key < r[j].key })
+	return r
+}
+
+// stickerBatch: işçiye düşen, değerlendirilmemiş stickerlardan paket ("" = yok)
+func stickerBatch(worker, of, n int) string {
+	var b strings.Builder
+	c := 0
+	for i, s := range loadStickers() {
+		if i%of != worker%of || exists(evalFile(s.key)) || !exists(s.smallImg) || c == n {
+			continue
+		}
+		c++
+		var chats []string
+		for ch, k := range s.Chats {
+			chats = append(chats, fmt.Sprintf("%s×%d", ch, k))
+		}
+		sort.Strings(chats)
+		fmt.Fprintf(&b, "## %s\nGörsel: %s (WhatsApp STICKER)\n", s.key, s.smallImg)
+		fmt.Fprintf(&b, "Kullanım: %d kez gönderdin, %d kez sana geldi; %s → %s\nSohbetler: %s\n",
+			s.Sent, s.Got, s.First[:10], s.Last[:10], strings.Join(chats, ", "))
+		if s.Photo != "" {
+			fmt.Fprintf(&b, "Kaynak foto olabilir (görsel benzerlik %.2f): %s — açıp karşılaştır; aynı kişi/an mı?\n",
+				s.Sim, filepath.Join(filepath.Dir(s.smallImg), s.Photo+".jpg"))
+		}
+		fmt.Fprintf(&b, "Yaz: %s\n\n", evalFile(s.key))
+	}
+	if c == 0 {
+		return ""
+	}
+	return fmt.Sprintf("# Paket (%d sticker) — talimat: src/photos/rate.md\n\n", c) + b.String()
 }

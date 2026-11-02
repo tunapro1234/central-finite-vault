@@ -19,7 +19,7 @@ Paketteki her medya için:
   "id": "kartın başlığındaki kimlik (## sonrası)",
   "gerekce": "Puanlara nasıl vardığın: neye baktın, neyi tarttın (3-6 cümle; düşünce izi)",
   "ne_var": "Görüntüde ne var, ne oluyor (2-3 cümle)",
-  "tur": "anı | portre | grup | manzara | yemek | etkinlik | ekran görüntüsü | meme | belge | diğer",
+  "tur": "anı | portre | grup | manzara | yemek | etkinlik | ekran görüntüsü | meme | belge | sticker | diğer",
   "kisiler": ["görünen kişiler; karttan ya da tahmin, bilinmiyorsa 'tanınmayan kişi'"],
   "yer": "nerede çekilmiş (kart + görüntüden)",
   "kompozisyon": "ışık, kadraj, netlik, renk (1-2 cümle)",
@@ -39,6 +39,11 @@ Puanlar 1-10:
 - `onem`: Tuna için ne kadar anlamlı (yakın insanlar, ilkler, özel günler, yolculuklar yüksek;
   ekran görüntüsü, belge, meme, bulanık tekrar kare düşük).
 - `insta`: Instagram'a atmaya değer mi (kalite + anlam + paylaşılabilirlik).
+
+**Sticker** (`WhatsApp STICKER`): hazır meme/emoji mi, yoksa gerçek bir fotoğraftan (Tuna'nın ya da
+arkadaşlarının yüzü, bir an) kesilmiş kişisel bir sticker mı, söyle. Kişisel stickerlar genelde ikonik
+bir andan yapılır; çok gönderilmişse `ikoniklik`/`onem` yüksek. Kartta "Kaynak foto olabilir" varsa o
+görseli de aç ve JSON'a `"kaynak_foto": true/false` ekle (aynı kişi ve aynı kare mi).
 
 Kurallar: Dürüst ol, çoğu foto sıradandır (5'in altı normal). Hassas içerikte (belge, kimlik, sağlık,
 mahrem) yalnız türünü yaz, içeriği aktarma, `insta` 1. Yalnız `Yaz:` yollarına yaz.

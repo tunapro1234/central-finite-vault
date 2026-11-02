@@ -109,6 +109,18 @@ func thumb(key, kind, src string, dur float64) (string, error) {
 }
 
 func next(db *sql.DB, worker, of, n int) {
+	for _, d := range []string{"thumbs", "eval", "batches"} {
+		check(os.MkdirAll(filepath.Join(out, d), 0o700))
+	}
+	batch := func(text string) {
+		p := filepath.Join(out, "batches", fmt.Sprintf("w%d-%s.md", worker, time.Now().Format("0102-150405")))
+		check(os.WriteFile(p, []byte(text), 0o600))
+		fmt.Println(p)
+	}
+	if text := stickerBatch(worker, of, n); text != "" { // önce stickerlar (az ve kaynak fotoyu gösteriyorlar)
+		batch(text)
+		return
+	}
 	rows, err := db.Query(media+` AND e.id % ? = ? ORDER BY (e.id * 7919) % 10007`, of, worker%of)
 	check(err)
 	type item struct {
@@ -131,9 +143,6 @@ func next(db *sql.DB, worker, of, n int) {
 	if len(items) == 0 {
 		fmt.Println("BİTTİ")
 		return
-	}
-	for _, d := range []string{"thumbs", "eval", "batches"} {
-		check(os.MkdirAll(filepath.Join(out, d), 0o700))
 	}
 	who, sigs := notes(), loadSignals()
 	var b strings.Builder
@@ -177,9 +186,7 @@ func next(db *sql.DB, worker, of, n int) {
 		}
 		fmt.Fprintf(&b, "\nYaz: %s\n\n", evalFile(it.key))
 	}
-	p := filepath.Join(out, "batches", fmt.Sprintf("w%d-%s.md", worker, time.Now().Format("0102-150405")))
-	check(os.WriteFile(p, []byte(b.String()), 0o600))
-	fmt.Println(p)
+	batch(b.String())
 }
 
 func main() {

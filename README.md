@@ -157,6 +157,14 @@ ajanının `photos-meta.sqlite` çıkarımından):
 - **WhatsApp**: gönderdiğin her sohbet +0.5 (en çok +1.5), gönderdiğinde aldığı her tepki +0.25
   (en çok +1); sana geldiğinde tepki verdin ya da 10 dk içinde güldün (😂, haha, jsjs…) +0.5 (en çok +1)
 
+- **sticker**: bu fotodan WhatsApp stickerı yapılmışsa +1.5, gönderildikçe +0.1 (en çok +1). Eşleşme
+  CLIP benzerliğiyle (≥0.95) ya da Haiku'nun sticker kartında doğrulamasıyla (`kaynak_foto`)
+
+Vektör veritabanı (`uv run src/photos/embed.py embed | stickers | search "metin"`): galeri fotoları ve
+farklı stickerlar CLIP (ViT-B/32, işlemcide) ile `data/processed/photos/vectors.sqlite`'a (sqlite-vec)
+girer; Türkçe metinle arama çok dilli CLIP metin kodlayıcısıyla. Stickerlar da Haiku'ya gösterilir
+(kaç kez gönderildi, kimlere, olası kaynak foto).
+
 `puan = (onem + ikoniklik + insta) / 3 + sinyal bonusu` → `./bin/photos score` →
 `data/processed/photos/scores.tsv` (yüksekten düşüğe).
 
