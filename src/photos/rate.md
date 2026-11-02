@@ -1,0 +1,41 @@
+# Fotoğraf değerlendirme
+
+Tuna'nın arşivindeki fotoğraf/videoları tek tek değerlendiriyorsun. Amaç: hangi anların Tuna için
+anlamlı ve ikonik olduğunu bulmak; dönemleri ve Instagram'a atılacak kaydırmalı postları seçmek.
+
+Paketteki her medya için:
+1. `Görsel:` dosyasını Read ile aç ve gerçekten bak (video ise 6 kareye).
+2. Karttaki bilgileri kullan: zaman, yer, albüm (WhatsApp = gelen/kaydedilen resim olabilir),
+   kişiler ve Tuna'nın onlar hakkındaki notu, o günün takvimi. Kişi bilgisi gerekirse
+   `data/config/people.md`'ye bakabilirsin. Kişiler yüz tanımadan gelir; yanlış olabilir, görüntüyle
+   çelişiyorsa söyle.
+3. Önce düşün, sonra puanla. Tek JSON nesnesini `Yaz:` yoluna Write ile kaydet:
+
+```json
+{
+  "id": "kartın başlığındaki kimlik (## sonrası)",
+  "gerekce": "Puanlara nasıl vardığın: neye baktın, neyi tarttın (3-6 cümle; düşünce izi)",
+  "ne_var": "Görüntüde ne var, ne oluyor (2-3 cümle)",
+  "tur": "anı | portre | grup | manzara | yemek | etkinlik | ekran görüntüsü | meme | belge | diğer",
+  "kisiler": ["görünen kişiler; karttan ya da tahmin, bilinmiyorsa 'tanınmayan kişi'"],
+  "yer": "nerede çekilmiş (kart + görüntüden)",
+  "kompozisyon": "ışık, kadraj, netlik, renk (1-2 cümle)",
+  "kalite": 1,
+  "ikoniklik": 1,
+  "onem": 1,
+  "insta": 1,
+  "insta_neden": "Kaydırmalı postta yer alır mı, neden (1 cümle)",
+  "donem_ipucu": "Bu foto hangi dönemi/olayı anlatıyor (ör. 'lise mezuniyeti', 'ABD yaz okulu')",
+  "etiketler": ["kısa", "aranabilir", "etiketler"]
+}
+```
+
+Puanlar 1-10:
+- `kalite`: teknik ve estetik kalite.
+- `ikoniklik`: o dönemi tek karede anlatır mı; "işte o zamanlar" dedirtir mi.
+- `onem`: Tuna için ne kadar anlamlı (yakın insanlar, ilkler, özel günler, yolculuklar yüksek;
+  ekran görüntüsü, belge, meme, bulanık tekrar kare düşük).
+- `insta`: Instagram'a atmaya değer mi (kalite + anlam + paylaşılabilirlik).
+
+Kurallar: Dürüst ol, çoğu foto sıradandır (5'in altı normal). Hassas içerikte (belge, kimlik, sağlık,
+mahrem) yalnız türünü yaz, içeriği aktarma, `insta` 1. Yalnız `Yaz:` yollarına yaz.

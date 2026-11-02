@@ -74,7 +74,8 @@ def scan_library(root: Path) -> dict[str, list[DiskFile]]:
     index: dict[str, list[DiskFile]] = defaultdict(list)
     if not root.exists():
         return index
-    for dirpath, _, names in os.walk(root):
+    for dirpath, dirs, names in os.walk(root):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]  # gizli klasörler (ör. kopya karantinası) atlanır
         for n in names:
             if n.endswith((".xmp", ".part")) or n.startswith("."):
                 continue

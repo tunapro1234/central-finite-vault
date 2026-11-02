@@ -86,6 +86,7 @@ uv run cfv sync gcal [--status]       # Google Takvim senkronu (timer bunu 30 dk
 uv run cfv sync gmail                 # Gmail senkronu (başlık + snippet)
 uv run cfv chart                      # data/processed/chart.html — değişkenleri aç/kapa grafik
 ./bin/compact jobs | input <düğüm>   # hiyerarşik raporlar (Go; aşağıda)
+./bin/photos next <k> <N> | status   # foto değerlendirme paketleri (Haiku işçileri; src/photos/worker.md)
 uv run pytest
 ```
 

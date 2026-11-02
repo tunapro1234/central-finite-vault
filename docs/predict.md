@@ -13,7 +13,8 @@ projeler, takvim) birlikte simüle eden bir **world model**: ben + env birlikte 
   metin/foto için dondurulmuş yerel embedding) + sıralı model. RNN/GRU önce (düzensiz zaman,
   "şimdiki hâl" vektörü); gerekirse Mamba/transformer. Referans: life2vec, RMTPP, Neural Hawkes.
 - `cfv-predict-persona`: Tuna'nın yerine geçen LLM. Girdi: t'den önceki hiyerarşik hafıza +
-  t'nin takvimi → t'nin raporu. Önce eğitimsiz (in-context), sonra yerel QLoRA ince ayar.
+  t'nin takvimi → t'nin raporu. LLM işi bp ile açılan **Haiku** ajanlarına yaptırılır
+  (`bp open <ad> <klasör> --claude --parent cfv-predict-persona -- --model haiku`).
 
 ## Ortak kurallar
 - **Walk-forward:** t gününü tahmin eden hiçbir şey t'yi ya da sonrasını görmez. t'yi kapsayan
@@ -35,6 +36,6 @@ projeler, takvim) birlikte simüle eden bir **world model**: ben + env birlikte 
 - Kod küçük ve sade (Tuna: "bloat olmasın"). ML için Python/PyTorch serbest; bağımlılıklar
   `src/predict/` altında ayrı uv projesinde (ana projeyi şişirme).
 - Donanım: RTX 3070 Laptop 8 GB, 38 GB RAM, 16 çekirdek. GPU tek: aynı anda tek eğitim
-  (koordinatör sıraya koyar). Veri makineden çıkmasın; persona için Claude kullanımı Tuna'nın
-  onayıyla (gün raporları zaten Claude'a gidiyor), yerel model tercih.
+  (koordinatör sıraya koyar). **GPU'da LLM çalıştırma** (ollama/llama yok; Tuna, 2 Kas 2026).
+  LLM gereken her iş Claude'a (bp Haiku ajanları); Tuna veri göndermeyi onayladı.
 - Yeni veri hâlâ geliyor (fotolar inmekte); deneyler veri değişince yeniden koşabilmeli.
