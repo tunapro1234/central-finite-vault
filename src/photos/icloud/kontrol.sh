@@ -3,6 +3,10 @@
 # Günlük satırı → $DURUM/gunluk.tsv; sorun varsa bp ile haber verir.
 # Ortam: ortam.sh'teki yollar, CFV_ALARM_TO (varsayılan cfv-photos), CFV_DENEME=1 (mesaja DENEME öneki)
 set -u
+# ExecStopPost=+ root koşar ama systemd User=tunapro'nun USER/LOGNAME'ini bırakır → bp "tunapro" diye imzalar ve
+# BP_OWNER sınırı uygulanmaz. Root'ken bunları kaldır: imza [service:<birim>] olur (bp whoami ile sınandı).
+# HOME de tunapro'nunki kalır; bp hedefin durumunu yanlış dizinde arayıp kuyrukta takılıyordu.
+[ "$(id -u)" -eq 0 ] && { unset USER LOGNAME; export HOME=/root; }
 . "$(dirname "$0")/ortam.sh"
 TO=${CFV_ALARM_TO:-cfv-photos}
 LOG=$ST/indirme.log
