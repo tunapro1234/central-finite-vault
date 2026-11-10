@@ -1,0 +1,10 @@
+[Unit]
+Description=CFV: laptopta olmayan foto/videoların depo4 ikinci kopyası
+Documentation=file:///srv/central-finite-vault/src/photos/icloud/ikinci-kopya.sh
+RequiresMountsFor=/mnt/depo1 /mnt/depo4
+
+[Service]
+Type=oneshot
+ExecStart=/srv/central-finite-vault/src/photos/icloud/ikinci-kopya.sh
+Nice=15
+IOSchedulingClass=idle

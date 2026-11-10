@@ -1,0 +1,11 @@
+[Unit]
+Description=CFV: iCloud Fotoğraflar günlük çekim (06:00, Cumartesi hariç: o gün tam tur; borg penceresi 03:15-05:15 dışında)
+
+[Timer]
+OnCalendar=Sun,Mon..Fri *-*-* 06:00
+RandomizedDelaySec=20min
+Persistent=true
+Unit=cfv-icloudpd@gunluk.service
+
+[Install]
+WantedBy=timers.target
