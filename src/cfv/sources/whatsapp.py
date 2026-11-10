@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from cfv.ingest import Batch, open_ro, raw
+from cfv.ingest import Batch, drop_other_snapshots, iphone_extract, open_ro, snapshot_of
 from cfv.timeutil import from_coredata
 
 IMPORTER = "cfv.sources.whatsapp@1"
-SHARED = ("iphone", "extract-2026-11-01", "AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared")
+SHARED = ("AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared",)  # en yeni extract-<tarih>/ altında
 
 SESSION_TYPE = {0: "dm", 1: "group", 2: "broadcast", 3: "status", 4: "community"}
 MSG_TYPE = {0: "text", 1: "image", 2: "video", 3: "audio", 4: "contact", 5: "location",
@@ -21,10 +21,11 @@ SKIP_SESSIONS = {3}  # durum (status) güncellemeleri
 
 
 def ingest(conn, shared: Path | None = None) -> dict:
-    shared = shared or raw(*SHARED)
+    shared = shared or iphone_extract().joinpath(*SHARED)
     db_path = shared / "ChatStorage.sqlite"
     src = open_ro(db_path)
-    batch = Batch(conn, "whatsapp", db_path, IMPORTER, snapshot="2026-11-01")
+    batch = Batch(conn, "whatsapp", db_path, IMPORTER, snapshot=snapshot_of(db_path))
+    drop_other_snapshots(conn, "whatsapp", batch.source_id)
     stats = {"messages": 0, "skipped_system": 0, "chats": 0, "with_media": 0}
 
     sessions = {r["Z_PK"]: r for r in src.execute(

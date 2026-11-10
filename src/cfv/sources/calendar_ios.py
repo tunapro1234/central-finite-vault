@@ -9,18 +9,19 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-from cfv.ingest import Batch, open_ro, raw
+from cfv.ingest import Batch, drop_other_snapshots, iphone_extract, open_ro, snapshot_of
 from cfv.timeutil import DEFAULT_TZ, from_coredata, offset_of
 
 IMPORTER = "cfv.sources.calendar_ios@1"
-DEFAULT_DB = ("iphone", "extract-2026-11-01", "HomeDomain", "Library", "Calendar", "Calendar.sqlitedb")
+DEFAULT_DB = ("HomeDomain", "Library", "Calendar", "Calendar.sqlitedb")  # en yeni extract-<tarih>/ altında
 SKIP_CALENDARS = {"Birthdays", "Doğum Günleri", "Tatiller (Türkiye)"}
 
 
 def ingest(conn, db_path: Path | None = None) -> dict:
-    db_path = db_path or raw(*DEFAULT_DB)
+    db_path = db_path or iphone_extract().joinpath(*DEFAULT_DB)
     src = open_ro(db_path)
-    batch = Batch(conn, "calendar-ios", db_path, IMPORTER, snapshot="2026-11-01")
+    batch = Batch(conn, "calendar-ios", db_path, IMPORTER, snapshot=snapshot_of(db_path))
+    drop_other_snapshots(conn, "calendar-ios", batch.source_id)
     stats = {"events": 0, "skipped_calendars": 0, "occurrences": 0}
 
     occ: dict[int, list[tuple[float, float | None]]] = {}

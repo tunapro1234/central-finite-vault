@@ -17,12 +17,12 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from cfv.ingest import Batch, open_ro, raw
+from cfv.ingest import Batch, drop_other_snapshots, iphone_extract, open_ro, snapshot_of
 from cfv.sources import notes_proto
 from cfv.timeutil import DEFAULT_TZ, TR_DAYS, from_coredata, iso_week_monday
 
 IMPORTER = "cfv.sources.notes@1"
-DEFAULT_DB = ("iphone", "extract-2026-11-01", "AppDomainGroup-group.com.apple.notes", "NoteStore.sqlite")
+DEFAULT_DB = ("AppDomainGroup-group.com.apple.notes", "NoteStore.sqlite")  # en yeni extract-<tarih>/ altında
 
 TODO_TITLE = re.compile(r"^\s*ödevler\s+(\d{4})", re.I)
 WEEK_RE = re.compile(r"^(\d{1,2})(?:\s+(.*))?$")
@@ -132,9 +132,10 @@ def _local_midnight(d: dt.date) -> dt.datetime:
 
 
 def ingest(conn, db_path: Path | None = None) -> dict:
-    db_path = db_path or raw(*DEFAULT_DB)
+    db_path = db_path or iphone_extract().joinpath(*DEFAULT_DB)
     src = open_ro(db_path)
-    batch = Batch(conn, "apple-notes", db_path, IMPORTER, snapshot="2026-11-01")
+    batch = Batch(conn, "apple-notes", db_path, IMPORTER, snapshot=snapshot_of(db_path))
+    drop_other_snapshots(conn, "apple-notes", batch.source_id)
     stats = {"notes": 0, "todo_notes": 0, "weeks": 0, "todos": 0, "todos_done": 0, "empty": 0}
 
     rows = src.execute("""

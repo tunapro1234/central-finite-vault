@@ -83,7 +83,7 @@ func load(db *sql.DB) *tree {
 	t := &tree{db: db, by: map[string][]item{}, fit: map[string]bool{}}
 	rows, err := db.Query(`SELECT local_date, start_utc, coalesce(tz_offset_min,0), time_quality, `+est+`,
 		length(coalesce(title,'')) + length(coalesce(body,'')) + length(coalesce(payload,''))
-		FROM event WHERE kind NOT IN ('day_report','report') AND local_date < ?`, time.Now().Format("2006-01-02"))
+		FROM event WHERE kind NOT IN ('day_report','report','dream') AND local_date < ?`, time.Now().Format("2006-01-02"))
 	check(err)
 	defer rows.Close()
 	for rows.Next() {

@@ -5,11 +5,11 @@ from __future__ import annotations
 import datetime as dt
 from pathlib import Path
 
-from cfv.ingest import Batch, open_ro, raw
+from cfv.ingest import Batch, drop_other_snapshots, iphone_extract, open_ro, snapshot_of
 from cfv.timeutil import UTC, from_unix
 
 IMPORTER = "cfv.sources.zepp@1"
-DOCS = ("iphone", "extract-2026-11-01", "AppDomain-com.huami.watch", "Documents")
+DOCS = ("AppDomain-com.huami.watch", "Documents")  # en yeni extract-<tarih>/ altında
 
 # sleepStage.sleepType: 4 = tüm uyku zarfı; diğerleri evreler (zarf toplamıyla doğrulandı)
 SLEEP_STAGE = {1: "awake", 2: "light", 3: "rem", 5: "deep"}
@@ -28,10 +28,11 @@ def _user_dir(docs: Path) -> Path:
 
 
 def ingest(conn, docs: Path | None = None) -> dict:
-    docs = docs or raw(*DOCS)
+    docs = docs or iphone_extract().joinpath(*DOCS)
     udir = _user_dir(docs)
     core = open_ro(udir / "HMCorePersistanceDatabaseV1.sqlite")
-    batch = Batch(conn, "zepp", udir, IMPORTER, snapshot="2026-11-01")
+    batch = Batch(conn, "zepp", udir, IMPORTER, snapshot=snapshot_of(udir))
+    drop_other_snapshots(conn, "zepp", batch.source_id)
     stats = {"days": 0, "sleeps": 0, "workouts": 0}
 
     pai = {}

@@ -39,6 +39,10 @@ def init_db(path: Path | None = None) -> Path:
     return path
 
 
+# Bu türler dışa açılan hiçbir çıktıya (ağaç, grafik, site, raporlar) girmez. Rüya metni zaten
+# event.body'de değil, yalnız `dream` tablosunda; varlığı ve kişi önerisi de dışarıda kalsın.
+PRIVATE_KINDS = ("dream",)
+
 _TR_FOLD = str.maketrans({"ı": "i", "İ": "i"})
 
 

@@ -90,6 +90,47 @@ uv run cfv chart                      # data/processed/chart.html — değişken
 uv run pytest
 ```
 
+### Gece konsolidasyonu ("hipokampüs") ve büyüme
+
+`cfv-gunluk.timer` 05:30'da tetikler; servis foto + gmail çekimleri (05:20) bitene kadar bekler (en çok 2 sa), sonra ham veriyi işler: tarihli zstd `cfv.sqlite`
+yedeği (`processed/yedek/`, otomatik silme yok) → sahne kopyada `cfv ingest all` → kaynak başına azalma denetimi
+(beklenmedik azalmada DUR, canlı DB'ye yazmaz, `bp msg server-cfv`) → canlıya → `cfv tree` → gün kapanışı →
+foto türevleri (embed/mid/signals/score; değişen dosyalar önce `photos/yedek-gunluk/<tarih>/`) → büyüme satırı →
+tazelik denetimi. `derive.py match` haftada bir (`cfv-derive-match.timer`, Pazar 00:30). Kod: `src/akis/`.
+
+    uv run cfv status              # kaynak başına sayı, son olay, tazelik, son kapanan gün
+    uv run cfv status --buyume 30  # "sistem büyüyor mu": son 30 gün, günlük fark + 7/30 gün toplamı
+    uv run python -m akis.gunluk --dry-run --no-wait   # sahnede dene, canlıya yazmaz
+
+- `data/logs/buyume.tsv` günde bir satır (yalnız ekleme); `gunluk.log` / `gunluk.jsonl` tur ayrıntısı.
+- `data/processed/akis.sqlite` → `gun` tablosu: dün kapanınca `revizyon=1`; geç gelen veri (uyku, sonradan inen foto)
+  o günün içerik imzasını değiştirirse `revizyon+1`. Gün özeti / rüya kaydı gibi tüketiciler `revizyon`u izler.
+- Yeni iPhone yedeği: `raw/iphone/extract-<tarih>/` (ve `photos-db-`, `photos-meta-`) bitince içine `.tamam` konur;
+  okuyucular yalnız işaretli en yeni klasörü alır (2026-11-11 öncesi klasörler işaretsiz de geçerli).
+
+### Rüya günlüğü
+
+Giriş: tek kişilik "🌙 Rüya" WhatsApp grubu (metin ya da sesli mesaj; routes.json'da YOK, hiçbir ajan görmez) ve
+cfv-iphone'un sabah kestirmesi ("Rüya gördün mü?" → dikte / hatırlamıyorum / sonra). `-`, `yok`, `hatırlamıyorum` =
+hatırlanmayan gece (o da veri). Gece = girişin yerel tarihi − 1 gün; metin `12 kas:` / `2026-11-12:` ile başlarsa o gece.
+`cfv-ruya.timer` 15 dk'da bir (05:00–23:45): köprü store'unu yalnız o grubun JID'iyle salt-okur süzer → `raw/ruya/wa/<ay>/`
+(yalnız ekleme) → sesi faster-whisper large-v3-turbo ile GPU'da yazıya döker (tek seferlik süreç, VRAM bırakılır) →
+`cfv ingest dream` → o gece akis'te kapanınca (en çok 4 sa bekler) Haiku işi: `cfv-ruya-yorum` ajanı, yalnız uyanıştan
+önceki D−2..D olaylarıyla duygu, kişi önerisi, yer, tema, gündüz bağlantısı, önem sinyali yazar. Kod: `src/cfv/ruya.py`,
+`src/cfv/sources/dream.py`, talimat `src/cfv/ruya_agent.md`. Ayar `data/config/ruya.json` (`wa_jid`; kestirme `raw/sabah/<ay>/<gonderim_id>.json` okunur; tetik yalnız 15 dk'lık timer, .path yok).
+
+    uv run cfv ruya durum                     # son 14 gece: rüya/yok, parça, uzunluk, yorum var mı (metin yok)
+    uv run cfv ruya goster 2026-11-10         # metin + yorum (yalnız terminale)
+    uv run cfv ruya karar 2026-11-10 P123 hayir   # kişi önerisini reddet (evet = onayla); geri: cfv ruya geri <id>
+    uv run cfv ruya yeniden 2026-11-10        # aynı metinle yeni yorum (eskisi kalır)
+
+- Metin yalnız `dream` tablosunda (event.body boş): FTS, ağaç, grafik, site, raporlar görmez (`db.PRIVATE_KINDS`).
+  Loglara (`data/logs/ruya.log`) yalnız id ve uzunluk yazılır.
+- Kişi önerisi `event_person(role='dream')`, güven ≤0.6; kararlar `data/config/ruya.sqlite` (kişi alias anahtarlı,
+  silinmez, geri alma `undone_at`). Bu rol foto/mesaj gibi birlikte-bulunma sayılmaz; ayrı "rüyada görülme" sinyalidir.
+- Whisper ortamı repo dışında: `uv venv -p 3.12 /srv/cfv/ruya/.venv-whisper && uv pip install -p /srv/cfv/ruya/.venv-whisper/bin/python
+  faster-whisper nvidia-cublas-cu12 'nvidia-cudnn-cu12==9.*' 'av<16'` (model `/srv/cfv/ruya/models/`).
+
 ### Klasör ağacı
 
 `data/processed/timeline/2025/09-Eylül/W38 (15-21)/`

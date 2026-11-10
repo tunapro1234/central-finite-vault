@@ -154,4 +154,26 @@ CREATE TABLE IF NOT EXISTS event_link (
 );
 CREATE INDEX IF NOT EXISTS event_link_b ON event_link (b, kind);
 
+-- Rüya günlüğü (cfv.ruya, sources/dream.py). Rüya METNİ yalnız `dream` tablosunda durur: event.body boş,
+-- böylece FTS, ağaç, site, raporlar metni hiç görmez. Kişi önerileri event_person(role='dream').
+CREATE TABLE IF NOT EXISTS dream (
+    xid       TEXT PRIMARY KEY,          -- 'ruya-YYYY-MM-DD' (gecenin tarihi)
+    event_id  INTEGER REFERENCES event(id) ON DELETE CASCADE,
+    local_date TEXT NOT NULL,
+    recalled  INTEGER NOT NULL,          -- 0 = "hatırlamıyorum"
+    text      TEXT,
+    parts     TEXT NOT NULL              -- JSON [{id, src, at, kind, len}]
+);
+CREATE TABLE IF NOT EXISTS dream_eval (
+    xid           TEXT PRIMARY KEY,      -- dream.xid
+    job           TEXT NOT NULL,         -- data/processed/ruya/is/<job>.json
+    model         TEXT,
+    context_until TEXT NOT NULL,         -- yalnız bu andan önceki olaylar kullanıldı (UTC)
+    context_partial INTEGER NOT NULL DEFAULT 0,
+    emotion       TEXT, valence INTEGER, intensity INTEGER,
+    themes        TEXT, places TEXT, persons TEXT, day_links TEXT, signals TEXT,  -- JSON
+    reasoning     TEXT,
+    raw_json      TEXT NOT NULL
+);
+
 INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '2');

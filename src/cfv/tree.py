@@ -79,7 +79,8 @@ def build(conn, out: Path | None = None) -> dict:
     rows = conn.execute("""
         SELECT e.id, e.kind, e.start_utc, e.end_utc, e.tz_offset_min, e.local_date, e.time_quality,
                e.title, e.body, e.payload
-        FROM event e ORDER BY e.local_date, e.start_utc""").fetchall()
+        FROM event e WHERE e.kind NOT IN (%s) ORDER BY e.local_date, e.start_utc""" % ",".join(
+            f"'{k}'" for k in db.PRIVATE_KINDS)).fetchall()
     media = defaultdict(list)
     for eid, path, role in conn.execute(
             "SELECT event_id, path, role FROM media WHERE role IN ('original','adjusted')"):

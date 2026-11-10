@@ -18,9 +18,11 @@ SOURCES = {
     "calendar-ics": "calendar_ics",
     "calendar-google": "calendar_gcal",
     "reports": "reports",
+    "contacts": "contacts",  # gmail/whatsapp'tan önce: kişi takma adları onlarla birleşsin
     "gmail": "gmail",
     "whatsapp": "whatsapp",
     "zepp": "zepp",
+    "dream": "dream",
 }
 
 
@@ -85,6 +87,32 @@ def cmd_sync(args):
     print(gcal_sync.log_path().read_text().rstrip().splitlines()[-1])
 
 
+def cmd_status(args):
+    """Kaynak başına sayı/son olay, tazelik, son kapanan gün; --buyume N: son N günün büyümesi."""
+    from akis import buyume, gun, sayim, tazelik
+    path = args.db or db.default_db_path()
+    if args.buyume is not None:
+        print(buyume.table(args.buyume))
+        return
+    counts, last = sayim.counts(path), sayim.last_events(path)
+    snaps = {k: (snap, imp) for k, _, snap, imp in sayim.sources(path)}
+    print(f"{'kaynak':16} {'olay':>8}  {'son olay':10}  {'snapshot':20}  içe aktarıldı")
+    for k in sorted(counts, key=lambda k: -counts[k]):
+        snap, imp = snaps.get(k, (None, None))
+        print(f"{k:16} {counts[k]:>8}  {(last.get(k) or '-')[:10]:10}  {(snap or '-')[:20]:20}  {(imp or '-')[:16]}")
+    print(f"{'toplam':16} {sum(counts.values()):>8}")
+    print(f"foto türevleri: {sayim.photo_derivs()}")
+    g = gun.summary()
+    rev = ", ".join(f"{d} (r{r})" for d, r in g["revize_son"][-10:]) or "-"
+    print(f"son kapanan gün: {g['son_kapanan'] or '-'} · son 7 günde geç veriyle revize: {rev}")
+    print()
+    print(tazelik.report(tazelik.evaluate(path)))
+    rs = buyume.rows()
+    if rs:
+        print()
+        print(buyume.table(7))
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="cfv", description="Central Finite Vault")
     parser.add_argument("--db", type=Path, default=None, help="Varsayılan: data/processed/cfv.sqlite")
@@ -115,6 +143,12 @@ def main(argv: list[str] | None = None) -> None:
                    help="Olayların %%20'sinden fazlası silinmiş görünse de yaz")
     p.add_argument("--status", action="store_true", help="Son senkron durumunu göster")
 
+    p = sub.add_parser("status", help="Kaynak sayıları, tazelik, gün kapanışı; --buyume N: son N gün büyüme")
+    p.add_argument("--buyume", type=int, nargs="?", const=14, default=None, metavar="N")
+
+    p = sub.add_parser("ruya", help="Rüya günlüğü: tur | durum | goster | karar | geri | yeniden")
+    p.add_argument("rest", nargs=argparse.REMAINDER)
+
     args = parser.parse_args(argv)
     if args.cmd == "init-db":
         print(db.init_db(args.db))
@@ -128,6 +162,11 @@ def main(argv: list[str] | None = None) -> None:
         cmd_chart(args)
     elif args.cmd == "sync":
         cmd_sync(args)
+    elif args.cmd == "ruya":
+        from cfv import ruya
+        ruya.cli(args.rest)
+    elif args.cmd == "status":
+        cmd_status(args)
 
 
 if __name__ == "__main__":

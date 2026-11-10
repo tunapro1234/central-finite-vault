@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -32,6 +33,48 @@ def open_ro(path: Path) -> sqlite3.Connection:
 
 def raw(*parts: str) -> Path:
     return db.data_dir().joinpath("raw", *parts)
+
+
+# Yeni iPhone çıkarımları (cfv-iphone) tarihli klasöre yazılır ve bitince içine `.tamam` konur; yarım kopya
+# okunmasın diye yalnız işaretli klasör kabul edilir. Bu tarihten önceki klasörler işaretsiz de geçerli (geriye uyum).
+DONE_MARK = ".tamam"
+MARK_SINCE = "2026-11-11"
+
+
+def snapshot_date(d: Path) -> str:
+    """'extract-2026-11-01' / 'photos-db-2026-11-01-2' → '2026-11-01'."""
+    parts = d.name.split("-")
+    for i in range(len(parts) - 2):
+        if len(parts[i]) == 4 and parts[i].isdigit():
+            return "-".join(parts[i:i + 3])
+    return d.name
+
+
+def latest_dir(prefix: str, legacy: str, *, root: Path | None = None) -> Path:
+    """raw/iphone/<prefix>-<tarih>[-n] içinden en yeni tamamlanmış klasör; hiçbiri yoksa raw/iphone/<legacy>."""
+    root = root or raw("iphone")
+    ok = [d for d in sorted(root.glob(f"{prefix}-*")) if d.is_dir() and (
+        (d / DONE_MARK).exists() or snapshot_date(d) < MARK_SINCE)]
+    return ok[-1] if ok else root / legacy
+
+
+def snapshot_of(path: Path) -> str | None:
+    """Yolun içindeki ilk 'extract-<tarih>' / 'photos-db-<tarih>' atasının tarihi."""
+    for d in (path, *path.parents):
+        if re.match(r"^[a-z-]+-\d{4}-\d{2}-\d{2}", d.name):
+            return snapshot_date(d)
+    return None
+
+
+def iphone_extract() -> Path:
+    """En yeni tamamlanmış iPhone yedeği çıkarımı (raw/iphone/extract-<tarih>)."""
+    return latest_dir("extract", "extract-2026-11-01")
+
+
+def drop_other_snapshots(conn: sqlite3.Connection, kind: str, source_id: int) -> int:
+    """Aynı türün eski snapshot'larından kalan olaylar (yeni snapshot aynı kayıtları getirir → çift olmasın)."""
+    return conn.execute("DELETE FROM event WHERE source_id IN (SELECT id FROM source WHERE kind=? AND id<>?)",
+                        (kind, source_id)).rowcount
 
 
 class Batch:

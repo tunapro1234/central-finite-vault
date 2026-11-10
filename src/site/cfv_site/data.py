@@ -98,7 +98,7 @@ class Model:
         self.pday: dict[int, list[tuple[str, str, int]]] = defaultdict(list)
         for pid, day, kind, n in conn.execute(
                 "SELECT ep.person_id, e.local_date, e.kind, count(DISTINCT e.id) FROM event_person ep "
-                "JOIN event e ON e.id = ep.event_id GROUP BY 1, 2, 3 ORDER BY 2"):
+                "JOIN event e ON e.id = ep.event_id WHERE e.kind != 'dream' GROUP BY 1, 2, 3 ORDER BY 2"):
             cid = self.canon_of_person.get(pid)
             if cid is not None:
                 self.pday[cid].append((day, kind, n))

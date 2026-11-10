@@ -48,7 +48,7 @@ func cut(s string, n int) string {
 func loadEvents(db *sql.DB, where string, args ...any) []event {
 	rows, err := db.Query(`SELECT id, kind, start_utc, coalesce(end_utc,''), coalesce(tz_offset_min,0),
 		time_quality, coalesce(title,''), coalesce(body,''), coalesce(payload,'{}')
-		FROM event WHERE kind NOT IN ('day_report','report') AND `+where+` ORDER BY start_utc`, args...)
+		FROM event WHERE kind NOT IN ('day_report','report','dream') AND `+where+` ORDER BY start_utc`, args...)
 	check(err)
 	defer rows.Close()
 	var out []event
@@ -121,7 +121,7 @@ func dossier(db *sql.DB, day string, h0, h1 int, skeleton, weekTodos bool) strin
 		counts[e.kind]++
 	}
 	people := countMap(db, `SELECT ep.event_id, p.display_name FROM event_person ep JOIN person p ON p.id = ep.person_id
-		JOIN event e ON e.id = ep.event_id WHERE e.local_date = ?`, day)
+		JOIN event e ON e.id = ep.event_id WHERE e.local_date = ? AND e.kind != 'dream'`, day)
 	calPhotos := countMap(db, `SELECT l.b, l.a FROM event_link l JOIN event c ON c.id = l.b
 		WHERE l.kind = 'photo_at' AND c.local_date = ?`, day)
 

@@ -27,7 +27,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
-from cfv.ingest import Batch, open_ro, raw
+from cfv.ingest import Batch, latest_dir, open_ro, raw
 from cfv.timeutil import from_coredata
 
 IMPORTER = "cfv.sources.photos@1"
@@ -139,9 +139,10 @@ def scan_library(root: Path) -> dict[str, list[DiskFile]]:
 
 
 def latest_snapshot() -> Path:
-    """data/raw/iphone/photos-db-<tarih>/Photos.sqlite içinden en yenisi (yoksa DEFAULT_DB)."""
-    snaps = sorted(raw("iphone").glob("photos-db-*/Photos.sqlite"))
-    return snaps[-1] if snaps else raw(*DEFAULT_DB)
+    """data/raw/iphone/photos-db-<tarih>/Photos.sqlite içinden tamamlanmış (.tamam) en yenisi (yoksa DEFAULT_DB)."""
+    snaps = [d for d in raw("iphone").glob("photos-db-*") if (d / "Photos.sqlite").exists()]
+    d = latest_dir("photos-db", DEFAULT_DB[1]) if snaps else None
+    return d / "Photos.sqlite" if d and (d / "Photos.sqlite").exists() else raw(*DEFAULT_DB)
 
 
 EXT_ALIAS = {"jpeg": "jpg", "tif": "tiff"}
