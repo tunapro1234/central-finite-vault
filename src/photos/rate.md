@@ -21,7 +21,7 @@ Paketteki her medya için:
   "id": "kartın başlığındaki kimlik (## sonrası)",
   "gerekce": "Puanlara nasıl vardığın: neye baktın, neyi tarttın (3-6 cümle; düşünce izi)",
   "ne_var": "Görüntüde ne var, ne oluyor (2-3 cümle)",
-  "tur": "anı | portre | grup | manzara | yemek | etkinlik | ekran görüntüsü | meme | belge | sticker | diğer",
+  "tur": "anı | portre | grup | manzara | yemek | etkinlik | ekran görüntüsü | meme | belge | grafik | sticker | diğer",
   "ekran": "yalnız kartta Ekran: satırı varsa — kendi_ekran | gelen_ekran | ekran_degil",
   "uygulama": "ekran görüntüsüyse ve görünüyorsa: instagram | whatsapp | snapchat | video | harita | muzik | banka_alisveris | eposta | ai_sohbet | tarayici | oyun | diger",
   "kisiler": ["görünen kişiler; karttan ya da tahmin, bilinmiyorsa 'tanınmayan kişi'"],
@@ -42,6 +42,9 @@ Puanlar 1-10:
 - `ikoniklik`: o dönemi tek karede anlatır mı; "işte o zamanlar" dedirtir mi.
 - `onem`: Tuna için ne kadar anlamlı (yakın insanlar, ilkler, özel günler, yolculuklar yüksek;
   ekran görüntüsü, belge, meme, bulanık tekrar kare düşük).
+
+`grafik`: logo, afiş/duyuru, tasarım, maket (tişört/kapüşon vb.), render, ürün görseli — fotoğraf değil,
+tasarlanmış görsel. Logo ya da afiş içinde bir foto varsa yine `grafik`.
 - `insta`: Instagram'a atmaya değer mi (kalite + anlam + paylaşılabilirlik).
 
 **Ekran görüntüsü** (kartta `Ekran:` satırı): `ekran` alanı — `kendi_ekran` (Tuna'nın telefonunun ekran

@@ -522,9 +522,10 @@ func score(db *sql.DB) {
 		}
 		key := strings.TrimSuffix(filepath.Base(f), ".json")
 		s := sigs[key]
-		// belge/ekran görüntüsünün kopyası anı sayılmaz; Haiku "ekran_degil" dediyse ss değildir
+		// belge/grafik/ekran görüntüsünün kopyası anı sayılmaz (logo, afiş her yerde yeniden kullanılır);
+		// signals.json'daki sinyal kalır, yalnız puana eklenmez. Haiku "ekran_degil" dediyse ss değildir
 		shot := e.Ekran == "kendi_ekran" || e.Ekran == "gelen_ekran" || e.Ekran == "" && e.Tur == "ekran görüntüsü"
-		if e.Tur == "belge" || shot {
+		if e.Tur == "belge" || e.Tur == "grafik" || shot {
 			s.Copies, s.Days = 0, 0
 		}
 		p := (e.Onem+e.Ikoniklik+e.Insta)/3 + s.bonus()

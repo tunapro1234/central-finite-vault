@@ -151,11 +151,13 @@ ajanının `photos-meta.sqlite` çıkarımından):
 - **favori** +1.5; art arda ≥20 favorinin içindeyse yarısı (toplu yanlış favorileme)
 - **kopya/türev** (tek kural): küme = foto + aynı görüntünün kopyaları (256 bit dHash, Hamming ≤24) +
   türevleri (`uv run src/photos/derive.py match` → `derivs.tsv`: ekran görüntüsünde geçmesi, WhatsApp'tan
-  yeniden kaydı, kırpılmış/kesilmiş/düzenlenmiş hali; CLIP adayı + SIFT/RANSAC + piksel kaplaması, örnekte
-  ~%84 kesin). Ölçü: kaynağın (kümenin en eski fotosu) günü dışında kaç farklı günde yeniden kaydedilmiş/
+  yeniden kaydı, kırpılmış/kesilmiş/düzenlenmiş hali; CLIP adayı + SIFT/RANSAC + piksel kaplaması; arayüz
+  süzgecinden sonra 100 rastgele örnekte 95'i doğru). Ölçü: kaynağın (kümenin ekran görüntüsü olmayan en
+  eski fotosu) günü dışında kaç farklı günde yeniden kaydedilmiş/
   ekran görüntüsü alınmış. İlk-son arası ≥30 gün ise farklı gün başına +0.5 (en çok +2); aynı gün 10
   ekran görüntüsü 1 gün sayılır. Aynı anın başka kareleri birleştirilmez. Kaynak arayüz görüntüsüyse
-  (PNG, telefon ekranı oranı, ekran görüntüsü) ya da foto belge/ekran görüntüsü olarak puanlandıysa bonus yok
+  (PNG, telefon ekranı oranı, kamerasız ince şerit, ekran görüntüsü) ya da foto belge/grafik (logo, afiş,
+  maket, tasarım)/ekran görüntüsü olarak puanlandıysa bonus yok; sinyal `signals.json`'da yine durur
 - **ekran görüntüsü**: iPhone bayrağı ekranın/kâğıdın fotoğrafını da kapsıyor (örnekte %15); kartta
   `src/photos/apps.py` tahmini ipucu olarak durur, Haiku `ekran: kendi_ekran | gelen_ekran | ekran_degil`
   der; `ekran_degil` ise ekran görüntüsü sayılmaz
