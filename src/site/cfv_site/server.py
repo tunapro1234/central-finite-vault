@@ -55,10 +55,10 @@ LOGIN_HTML = """<!doctype html><html lang="tr"><head><meta charset="utf-8">
 <title>CFV — giriş</title><style nonce="{nonce}">
 :root{{color-scheme:dark}}body{{margin:0;min-height:100vh;display:grid;place-items:center;background:#17181c;
 color:#d8d8dc;font:15px/1.4 system-ui,sans-serif}}form{{width:min(320px,calc(100vw - 32px));display:grid;gap:12px}}
-h1{{font-size:18px;font-weight:600;margin:0 0 4px}}input{{font:inherit;padding:10px 12px;border-radius:8px;
+h1{{font-size:18px;font-weight:600;margin:0}}.slogan{{color:#8b8d96;font-style:italic;font-size:13px;margin:-8px 0 4px}}input{{font:inherit;padding:10px 12px;border-radius:8px;
 border:1px solid #3a3c44;background:#202228;color:inherit}}button{{font:inherit;padding:10px;border-radius:8px;
 border:0;background:#6d8cff;color:#0d0f14;font-weight:600;cursor:pointer}}p{{margin:0;color:#ff8f8f;font-size:13px}}
-</style></head><body><form method="post" action="/login"><h1>CFV</h1>{msg}
+</style></head><body><form method="post" action="/login"><h1>CFV</h1><div class="slogan">put yourself in a flash disk</div>{msg}
 <input type="password" name="password" autocomplete="current-password" autofocus required aria-label="Şifre"
 placeholder="Şifre"><button>Giriş</button></form></body></html>"""
 
