@@ -1,14 +1,15 @@
 """Google Takvim → data/raw/google-calendar/ sürekli (salt-okur) senkron.
 
-Her çalıştırmada:
-1. Takvim başına `gog calendar changed --since <son kontrol>` (ucuz). Değişiklik yoksa biter.
-2. Değişiklik varsa ya da son tam çekimden 24 saat geçtiyse: tüm takvimler tam çekilir
-   (tekrarlar açılmış halde, 2010 → bugün+400 gün), önceki anlık görüntüyle karşılaştırılır,
-   fark `changes.jsonl`'a eklenir (silinen olayların tam içeriği dahil — arşiv kaybolmaz),
-   `events.json` atomik olarak yenilenir.
-3. Değişiklik olduysa (ops.) cfv.sqlite'a import + klasör ağacı yeniden üretilir.
+Her çalıştırmada (gog v0.11; sunucuda günde 4 kez, src/systemd/system/cfv-gcal-sync.*):
+1. Tüm takvimler tam çekilir (tekrarlar açılmış halde, 2010 → bugün+400 gün), önceki anlık
+   görüntüyle karşılaştırılır, fark `changes.jsonl`'a eklenir (silinen olayların tam içeriği
+   dahil — arşiv kaybolmaz), değiştiyse `events.json` atomik olarak yenilenir. Eski events.json'ın
+   tarihli kopyası src/gsync/snapshot.sh ile history/'ye alınır.
+2. Değişiklik olduysa (ops.) cfv.sqlite'a import + klasör ağacı yeniden üretilir.
 
-gog yalnızca `--readonly --enable-commands=calendar` ile çağrılır: yazma isteği imkânsız.
+Hesap: CFV_GCAL_ACCOUNT ya da data/config/gcal-account (koda kişisel veri girmez).
+gog, izin listeli src/gsync/gog-ro üzerinden `--enable-commands=calendar --no-input` ile
+çağrılır: yalnız `calendar calendars` ve `calendar events` geçer, yazma isteği imkânsız.
 Ağ yoksa / token düştüyse: log'a yazar, hiçbir şeye dokunmadan 0 ile çıkar (timer sessiz kalır).
 """
 
@@ -23,11 +24,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from cfv.db import data_dir
+from cfv.db import REPO_ROOT, data_dir
 
-GOG = os.environ.get("CFV_GOG", "/home/tuna/.local/share/cfv-gog/gog")
-ACCOUNT = os.environ.get("CFV_GCAL_ACCOUNT", "tunagul54@gmail.com")
-FULL_EVERY = dt.timedelta(hours=24)
+GOG = os.environ.get("CFV_GOG", str(REPO_ROOT / "src" / "gsync" / "gog-ro"))
 WINDOW_START = "2010-01-01"
 WINDOW_AHEAD_DAYS = 400
 MAX_REMOVED_RATIO = 0.2  # tam çekimde olayların %20'sinden fazlası "silindi" görünürse yazma
@@ -37,6 +36,17 @@ log = logging.getLogger("cfv.gcal")
 
 class GogError(RuntimeError):
     pass
+
+
+def account() -> str:
+    a = os.environ.get("CFV_GCAL_ACCOUNT")
+    if a is None:
+        p = data_dir() / "config" / "gcal-account"
+        a = p.read_text() if p.exists() else ""
+    a = a.strip()
+    if not a:
+        raise GogError("takvim hesabı yok (CFV_GCAL_ACCOUNT ya da data/config/gcal-account)")
+    return a
 
 
 def out_dir() -> Path:
@@ -56,8 +66,8 @@ def _iso(t: dt.datetime) -> str:
 
 
 def gog(*args: str, timeout: int = 180) -> dict:
-    cmd = [GOG, "--readonly", "--enable-commands=calendar", "--no-input", "--color=never",
-           "--account", ACCOUNT, "calendar", *args, "--json"]
+    cmd = [GOG, "--enable-commands=calendar", "--no-input", "--color=never",
+           "--account", account(), "calendar", *args, "--json"]
     try:
         p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError) as e:
@@ -92,14 +102,6 @@ def calendars() -> list[dict]:
     return [{k: c.get(k) for k in ("id", "summary", "accessRole", "timeZone", "primary")} for c in cals]
 
 
-def changed_since(cal_ids: list[str], since: dt.datetime) -> int:
-    n = 0
-    for cid in cal_ids:
-        d = gog("changed", cid, "--since", _iso(since), "--max", "2500")
-        n += len(d.get("events") or [])
-    return n
-
-
 def full_fetch(cal_ids: list[str], now: dt.datetime) -> list[dict]:
     to = (now + dt.timedelta(days=WINDOW_AHEAD_DAYS)).date().isoformat()
     events = []
@@ -127,7 +129,7 @@ def diff(old: list[dict], new: list[dict]) -> dict:
     }
 
 
-def sync(*, force_full: bool = False, allow_mass_removal: bool = False) -> dict:
+def sync(*, allow_mass_removal: bool = False) -> dict:
     """Bir senkron turu. Dönen sözlük: ne yapıldığı. GogError dışarı sızmaz → 'error'."""
     root = out_dir()
     root.mkdir(parents=True, exist_ok=True)
@@ -142,21 +144,10 @@ def sync(*, force_full: bool = False, allow_mass_removal: bool = False) -> dict:
     state = _read_json(state_p, {})
     now = _now()
     try:
+        acc = account()
         cals = calendars()
         cal_ids = [c["id"] for c in cals]
-        last_full = state.get("last_full") and dt.datetime.fromisoformat(state["last_full"])
-        last_check = state.get("last_check") and dt.datetime.fromisoformat(state["last_check"])
-        need_full = force_full or not events_p.exists() or not last_full or now - last_full >= FULL_EVERY
-        reason = "zorla" if force_full else "ilk/periyodik" if need_full else None
-        if not need_full:
-            n = changed_since(cal_ids, last_check - dt.timedelta(minutes=10))
-            if n:
-                need_full, reason = True, f"{n} değişiklik"
-        if not need_full:
-            state.update(last_check=_iso(now), last_ok=_iso(now), last_error=None, failures=0)
-            _write_json(state_p, state)
-            return {"status": "unchanged"}
-
+        reason = "tam çekim"
         new = full_fetch(cal_ids, now)
     except GogError as e:
         state.update(last_error=f"{_iso(now)} {e}", failures=state.get("failures", 0) + 1)
@@ -173,14 +164,14 @@ def sync(*, force_full: bool = False, allow_mass_removal: bool = False) -> dict:
 
     changed = bool(d["added"] or d["changed"] or d["removed"])
     if changed or not events_p.exists():
-        _write_json(events_p, {"fetched_at": _iso(now), "account": ACCOUNT,
+        _write_json(events_p, {"fetched_at": _iso(now), "account": acc,
                                "window": [WINDOW_START, (now + dt.timedelta(days=WINDOW_AHEAD_DAYS)).date().isoformat()],
                                "calendars": cals, "events": new})
         with open(root / "changes.jsonl", "a") as f:
             f.write(json.dumps({"at": _iso(now), "reason": reason, "total": len(new), **d},
                                ensure_ascii=False) + "\n")
     state.update(last_check=_iso(now), last_full=_iso(now), last_ok=_iso(now), last_error=None,
-                 failures=0, total=len(new))
+                 failures=0, total=len(new), calendars=len(cals))
     _write_json(state_p, state)
     return {"status": "changed" if changed else "unchanged", "reason": reason, "total": len(new),
             "added": len(d["added"]), "changed": len(d["changed"]), "removed": len(d["removed"])}
@@ -196,12 +187,13 @@ def setup_logging() -> None:
     log.setLevel(logging.INFO)
 
 
-def run(*, force_full=False, allow_mass_removal=False, ingest=True) -> int:
-    """systemd timer'ın çağırdığı giriş. Her durumda 0 döner; ayrıntı log'da."""
+def run(*, force_full=True, allow_mass_removal=False, ingest=True) -> int:
+    """systemd timer'ın çağırdığı giriş. Her durumda 0 döner; ayrıntı log'da.
+    force_full: CLI uyumu için duruyor; her tur zaten tam çekim."""
     os.umask(0o077)
     setup_logging()
     try:
-        r = sync(force_full=force_full, allow_mass_removal=allow_mass_removal)
+        r = sync(allow_mass_removal=allow_mass_removal)
     except Exception as e:  # beklenmeyen hata da timer'ı gürültüye boğmasın
         log.exception("beklenmeyen hata: %s", e)
         return 0

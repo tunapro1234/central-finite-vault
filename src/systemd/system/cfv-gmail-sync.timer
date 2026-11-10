@@ -1,0 +1,10 @@
+[Unit]
+Description=CFV: Gmail senkronu her gün 06:45
+
+[Timer]
+OnCalendar=*-*-* 06:45
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

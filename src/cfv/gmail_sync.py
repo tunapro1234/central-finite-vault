@@ -3,11 +3,14 @@
 Her hesap için:
 1. `gog gmail messages search` ile mesaj id'leri listelenir. İlk çekimde ay ay
    (`after:`/`before:` unix saniye; dakikalık kotaya sığsın), sonraki çekimlerde son çekimden 2 gün öncesinden beri.
-2. Yeni id'ler için `gog gmail raw --format metadata` (tek mesaj, gövdesiz): zaman, etiketler,
+2. Yeni id'ler için `gog gmail get --format metadata --json` (tek mesaj, gövdesiz): zaman, etiketler,
    snippet, thread, From/To/Cc/Subject.
 3. `messages.jsonl` (id'ye göre tekil, zamana göre sıralı) atomik yeniden yazılır; `state.json`.
 
-gog yalnızca `--readonly --enable-commands=gmail` ile çağrılır: gönderme/silme/etiketleme imkânsız.
+gog (v0.11), izin listeli src/gsync/gog-ro üzerinden `--enable-commands=gmail --no-input` ile
+çağrılır: yalnız labels list / messages search / get geçer; gönderme/silme/etiketleme imkânsız.
+Sunucuda günde 1 kez (src/systemd/system/cfv-gmail-sync.*); messages.jsonl'ın tarihli kopyası
+src/gsync/snapshot.sh ile history/'ye alınır.
 Gmail kotası (dakikalık) dolarsa bekleyip yeniden dener. Ağ yoksa / token düştüyse: log'a yazar,
 0 ile çıkar. Etiket değişiklikleri (okundu, arşiv…) eski mesajlara geri yansıtılmaz.
 """
@@ -25,9 +28,9 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from cfv.db import data_dir
+from cfv.db import REPO_ROOT, data_dir
 
-GOG = os.environ.get("CFV_GOG", "/home/tuna/.local/share/cfv-gog/gog")
+GOG = os.environ.get("CFV_GOG", str(REPO_ROOT / "src" / "gsync" / "gog-ro"))
 FIRST_YEAR = 2004  # Gmail'in açılışı
 OVERLAP = dt.timedelta(days=2)
 WORKERS = 4
@@ -67,7 +70,7 @@ def _iso(t: dt.datetime) -> str:
 
 
 def gog(account: str, *args: str, timeout: int = 300) -> dict:
-    cmd = [GOG, "--readonly", "--enable-commands=gmail", "--no-input", "--color=never",
+    cmd = [GOG, "--enable-commands=gmail", "--no-input", "--color=never",
            "--account", account, "gmail", *args]
     for _ in range(RATE_TRIES):
         try:
@@ -95,10 +98,12 @@ def list_ids(account: str, query: str) -> list[str]:
 
 
 def fetch(account: str, mid: str, labels: dict[str, str]) -> dict:
-    m = gog(account, "raw", mid, "--format", "metadata")
+    d = gog(account, "get", mid, "--format", "metadata", "--json")
+    m = d.get("message", d)
     h = {}
     for x in m.get("payload", {}).get("headers", []):
-        h.setdefault(x["name"].lower(), x["value"])
+        if x.get("name"):  # gog v0.11 boş değerli başlıkta "value" alanını atlıyor
+            h.setdefault(x["name"].lower(), x.get("value"))
     return {
         "id": m["id"], "thread": m.get("threadId"),
         "time": _iso(dt.datetime.fromtimestamp(int(m["internalDate"]) / 1000, dt.timezone.utc)),
