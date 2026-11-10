@@ -1,4 +1,5 @@
 # --- KİŞİSEL VERİ: asla git'e girmez ---
+/data
 /data/
 data/
 *.sqlite
