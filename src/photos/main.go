@@ -46,7 +46,10 @@ func check(err error) {
 func exists(p string) bool { _, err := os.Stat(p); return err == nil }
 
 // dosyalar kalıcı kimlikle (iCloud asset UUID) adlanır: yeniden ingest event id'lerini değiştirir
-func evalFile(key string) string { return filepath.Join(out, "eval", key+".json") }
+func evalFile(key string) string { return filepath.Join(out, "eval", fname(key)+".json") }
+
+// fname: UUID'siz medyanın anahtarı 'file:<yol>' → dosya adında : ve / olmaz
+func fname(key string) string { return strings.NewReplacer(":", "-", "/", "_").Replace(key) }
 
 // medya: dosyası diskte olan foto/videolar; düzenlenmiş sürüm varsa o (Tuna'nın beğendiği hâl)
 const media = `SELECT e.id, e.external_id, e.kind, e.start_utc, coalesce(e.tz_offset_min,180), e.local_date,
@@ -89,7 +92,7 @@ func strs(db *sql.DB, q string, args ...any) []string {
 
 // thumb: 768 px JPEG; video için 6 karelik bir sayfa
 func thumb(key, kind, src string, dur float64) (string, error) {
-	dst, _ := filepath.Abs(filepath.Join(out, "thumbs", key+".jpg"))
+	dst, _ := filepath.Abs(filepath.Join(out, "thumbs", fname(key)+".jpg"))
 	if exists(dst) {
 		return dst, nil
 	}
@@ -101,7 +104,13 @@ func thumb(key, kind, src string, dur float64) (string, error) {
 		cmd = exec.Command("ffmpeg", "-v", "error", "-i", src, "-vf",
 			fmt.Sprintf("fps=6/%.1f,scale=384:-2,tile=3x2", dur), "-frames:v", "1", "-y", dst)
 	}
-	if b, err := cmd.CombinedOutput(); err != nil { // bozuk/yarım dosya: .err ile işaretle, tekrar denenmez
+	b, err := cmd.CombinedOutput()
+	if err != nil && kind != "video" { // vips'in açamadığı HEIC (derinlik haritalı Portre): derive.py mid/ aynı biçimde (pillow-heif)
+		if m, e := os.ReadFile(filepath.Join(out, "mid", fname(key)+".jpg")); e == nil && os.WriteFile(dst, m, 0o644) == nil {
+			return dst, nil
+		}
+	}
+	if err != nil { // açılamayan dosya: .err ile işaretle, tekrar denenmez
 		os.WriteFile(strings.TrimSuffix(dst, ".jpg")+".err", b, 0o600)
 		return "", fmt.Errorf("%s: %v", src, err)
 	}
@@ -135,7 +144,7 @@ func next(db *sql.DB, worker, of, n int) {
 		var path sql.NullString
 		check(rows.Scan(&it.id, &it.key, &it.kind, &it.utc, &it.off, &it.day, &it.title, &it.body, &it.dur, &path))
 		if it.path = path.String; path.Valid && exists(it.path) && !exists(evalFile(it.key)) &&
-			!exists(filepath.Join(out, "thumbs", it.key+".err")) {
+			!exists(filepath.Join(out, "thumbs", fname(it.key)+".err")) {
 			items = append(items, it)
 		}
 	}
@@ -144,7 +153,7 @@ func next(db *sql.DB, worker, of, n int) {
 		fmt.Println("BİTTİ")
 		return
 	}
-	who, sigs := notes(), loadSignals()
+	who, sigs, apps := notes(), loadSignals(), loadApps()
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Paket (%d medya) — talimat: src/photos/rate.md\n\n", len(items))
 	for _, it := range items {
@@ -175,6 +184,13 @@ func next(db *sql.DB, worker, of, n int) {
 		if len(ppl) > 0 {
 			fmt.Fprintf(&b, "Kişiler (iCloud yüz tanıma): %s\n", strings.Join(ppl, "; "))
 		}
+		switch a := apps[it.key]; a {
+		case "":
+		case "gorsel":
+			fmt.Fprintf(&b, "Ekran: iPhone ekran görüntüsü diye işaretlemiş; otomatik tahmin ekranın/kâğıdın fotoğrafı olabileceği (ipucu, kesin değil)\n")
+		default:
+			fmt.Fprintf(&b, "Ekran: iPhone ekran görüntüsü diye işaretlemiş; otomatik uygulama tahmini %s (ipucu, kesin değil)\n", a)
+		}
 		if l := sigs[it.key].line(); l != "" {
 			fmt.Fprintf(&b, "Sinyaller: %s\n", l)
 		}
@@ -187,6 +203,19 @@ func next(db *sql.DB, worker, of, n int) {
 		fmt.Fprintf(&b, "\nYaz: %s\n\n", evalFile(it.key))
 	}
 	batch(b.String())
+}
+
+// loadApps: apps.py tahmin çıktısı (data/processed/photos/apps.tsv): ekran görüntüsü → olası uygulama
+func loadApps() map[string]string {
+	m := map[string]string{}
+	if b, err := os.ReadFile(filepath.Join(out, "apps.tsv")); err == nil {
+		for _, l := range strings.Split(string(b), "\n")[1:] {
+			if c := strings.Split(l, "\t"); len(c) > 1 {
+				m[c[0]] = c[1]
+			}
+		}
+	}
+	return m
 }
 
 func main() {

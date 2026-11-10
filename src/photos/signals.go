@@ -2,7 +2,8 @@ package main
 
 // Fotoğraf çevresinden sayısal sinyaller (LLM'e kartla verilir, puana eklenir):
 //   - favori: 1; art arda ≥20 favorinin içindeyse 0.5 (toplu yanlış favori)
-//   - kopya: aynı görüntü galeride kaç kez var, ilk-son kopya arası kaç gün (dHash; ekran görüntüleri hariç)
+//   - kopya: aynı görüntü ve türevleri galeride kaç farklı güne yayılmış (dHash kopyaları + derive.py'nin
+//     bulduğu ekran görüntüsü/kaydedilmiş/kesilmiş türevler, derivs.tsv)
 //   - WhatsApp: kime gönderdin, kimden geldi, geldiğinde güldün mü, tepkiler (photos-meta wa_reaction)
 //   - Fotoğraflar uygulaması: kaç kez açtın/paylaştın, açıklama yazdın mı, düzenledin mi,
 //     kendi Anı'na koydun mu, Apple öne çıkardı mı (photos-meta engagement/selection)
@@ -35,8 +36,10 @@ var laugh = regexp.MustCompile(`(?i)😂|🤣|💀|😭|ahah|haha|jsjs|sjsj|ksks
 
 type sig struct {
 	Fav      float64  `json:"favori,omitempty"`
-	Copies   int      `json:"kopya,omitempty"`
-	SpanDays int      `json:"kopya_gun,omitempty"`
+	Copies   int      `json:"kopya,omitempty"`               // küme: kaynak + dHash kopyaları + türevler
+	Days     int      `json:"kopya_farkli_gun,omitempty"`    // kaynağın günü dışındaki farklı gün sayısı
+	SpanDays int      `json:"kopya_yayilim_gun,omitempty"`   // ilk-son arası gün
+	UISrc    bool     `json:"kopya_kaynak_arayuz,omitempty"` // kaynak arayüz görüntüsü (PNG/ekran boyutu/ss): bonus yok
 	SentTo   []string `json:"gonderdigin,omitempty"`
 	From     []string `json:"gelen,omitempty"`
 	Laughed  int      `json:"guldun,omitempty"`
@@ -61,7 +64,9 @@ func (s sig) line() string {
 	}
 	add(s.Fav == 1, "favorilerde")
 	add(s.Fav == 0.5, "favorilerde (toplu favorileme içinde, yarım sayılır)")
-	add(s.Copies > 1, "galeride %d kopyası var, ilk-son arası %d gün", s.Copies, s.SpanDays)
+	add(s.Copies > 1 && s.Days == 0, "galeride %d kopyası/türevi var, hepsi aynı gün", s.Copies)
+	add(s.Days > 0, "%d farklı günde yeniden kaydedilmiş/ekran görüntüsü alınmış (%d kopya/türev), %d gün arayla%s",
+		s.Days, s.Copies-1, s.SpanDays, map[bool]string{true: " (kaynak bir arayüz görüntüsü)"}[s.UISrc])
 	add(s.Views > 0, "%d kez açıp baktın", s.Views)
 	add(s.Shares > 0, "%d kez paylaştın", s.Shares)
 	add(s.Caption, "altına açıklama yazdın")
@@ -80,8 +85,8 @@ func (s sig) line() string {
 // bonus: puana eklenen kısım (README: "Fotoğraf puanı")
 func (s sig) bonus() float64 {
 	b := 1.5 * s.Fav
-	if s.Copies > 1 && s.SpanDays >= 30 { // yakın tarihli birkaç kopya önemsiz, uzun aralıkta çok kopya önemli
-		b += min(2, float64(s.Copies-1)*0.5)
+	if s.Days > 0 && s.SpanDays >= 30 && !s.UISrc { // yakın tarihli birkaç kopya önemsiz, uzun aralıkta çok gün önemli
+		b += min(2, float64(s.Days)*0.5)
 	}
 	b += min(1.5, math.Log2(1+float64(s.Views))/4) + min(1, 0.5*float64(s.Shares))
 	b += map[bool]float64{true: 1}[s.Caption] + map[bool]float64{true: 0.5}[s.Edited]
@@ -217,6 +222,7 @@ func signals(db *sql.DB) {
 		p := pic{gallery: true}
 		var utc string
 		check(rows.Scan(&p.key, &p.path, &utc, &p.fav, &p.shot, &p.edt))
+		p.shot = p.shot && evalScreen(p.key) != "ekran_degil" // iPhone bayrağı ekranın/kâğıdın fotoğrafını da kapsıyor
 		p.t, _ = time.Parse(time.RFC3339, utc)
 		pics = append(pics, p)
 	}
@@ -326,6 +332,14 @@ func signals(db *sql.DB) {
 		rows.Close()
 	}
 	waKey := func(p string) string { _, k, _ := strings.Cut(p, "/Message/"); return k }
+	tall := map[string]bool{} // arayüz görüntüsü: telefon ekranı oranı (boy > 2 × en) ya da kamerasız ince şerit (kırpılmış arayüz)
+	if meta != nil {
+		for _, k := range strs(meta, `SELECT uuid FROM asset WHERE kind = 'photo' AND (2 * width < height
+				OR 3 * min(width, height) < max(width, height) AND coalesce(camera_model, '') = '')`) {
+			tall[k] = true
+		}
+	}
+	copyClusters(pics[:nGallery], groups, tall, get)
 
 	for _, g := range groups {
 		var gal []int
@@ -344,16 +358,8 @@ func signals(db *sql.DB) {
 				myr += mine[waKey(p.path)]
 			}
 		}
-		if len(gal) == 0 {
-			continue
-		}
-		sort.Slice(gal, func(a, b int) bool { return pics[gal[a]].t.Before(pics[gal[b]].t) })
-		span := int(pics[gal[len(gal)-1]].t.Sub(pics[gal[0]].t).Hours() / 24)
 		for _, i := range gal {
 			s := get(pics[i].key)
-			if len(gal) > 1 {
-				s.Copies, s.SpanDays = len(gal), span
-			}
 			s.SentTo, s.From, s.Laughed, s.MyReacts, s.Reacts = keys(sent), keys(from), min(laughed, 3), myr, their
 		}
 	}
@@ -378,6 +384,89 @@ func signals(db *sql.DB) {
 	check(os.WriteFile(filepath.Join(out, "signals.json"), b, 0o600))
 	fmt.Printf("%d fotoğrafta sinyal var (%d galeri fotosu, %d WhatsApp resmi, %d hash, meta: %v)\n",
 		len(res), nGallery, len(pics)-nGallery, len(hs), meta != nil)
+}
+
+// copyClusters: tek kopya kuralı. Küme = dHash grupları ∪ derivs.tsv türev→kaynak bağları (union-find);
+// kaynak = kümenin ekran görüntüsü olmayan en eski fotosu. Ölçü: kaynağın günü dışındaki farklı gün sayısı ve ilk-son arası gün.
+// Aynı anın başka kareleri (burst) birleştirilmez: derive.py yalnız aynı görüntüyü (SIFT + piksel kaplaması) bağlar.
+func copyClusters(gal []pic, groups map[int][]int, tall map[string]bool, get func(string) *sig) {
+	parent := make([]int, len(gal))
+	for i := range parent {
+		parent[i] = i
+	}
+	find := func(i int) int {
+		for parent[i] != i {
+			parent[i] = parent[parent[i]]
+			i = parent[i]
+		}
+		return i
+	}
+	union := func(a, b int) { parent[find(a)] = find(b) }
+	for _, g := range groups { // grubun galeri üyeleri (lider WhatsApp eki olabilir)
+		first := -1
+		for _, i := range g {
+			if i < len(gal) && first < 0 {
+				first = i
+			} else if i < len(gal) {
+				union(i, first)
+			}
+		}
+	}
+	idx := map[string]int{}
+	for i, p := range gal {
+		idx[p.key] = i
+	}
+	if f, err := os.Open(filepath.Join(out, "derivs.tsv")); err == nil {
+		sc := bufio.NewScanner(f)
+		for sc.Scan() {
+			c := strings.Split(sc.Text(), "\t")
+			a, okA := idx[c[0]]
+			if len(c) > 1 && okA {
+				if b, okB := idx[c[1]]; okB {
+					union(a, b)
+				}
+			}
+		}
+		f.Close()
+	}
+	comps := map[int][]int{}
+	for i := range gal {
+		comps[find(i)] = append(comps[find(i)], i)
+	}
+	for _, c := range comps {
+		if len(c) < 2 {
+			continue
+		}
+		sort.Slice(c, func(a, b int) bool { return gal[c[a]].t.Before(gal[c[b]].t) })
+		src := gal[c[0]] // kaynak: ekran görüntüsü olmayan en eski üye (ss, kaynağından önce tarihli olabiliyor)
+		for _, i := range c {
+			if !gal[i].shot {
+				src = gal[i]
+				break
+			}
+		}
+		days := map[string]bool{}
+		for _, i := range c {
+			if d := gal[i].t.Format("2006-01-02"); d != src.t.Format("2006-01-02") {
+				days[d] = true
+			}
+		}
+		span := int(gal[c[len(c)-1]].t.Sub(gal[c[0]].t).Hours() / 24)
+		ui := src.shot || tall[src.key] || strings.HasSuffix(strings.ToUpper(src.path), ".PNG")
+		for _, i := range c {
+			s := get(gal[i].key)
+			s.Copies, s.Days, s.SpanDays, s.UISrc = len(c), len(days), span, ui
+		}
+	}
+}
+
+// evalScreen: Haiku değerlendirmesindeki "ekran" alanı (kendi_ekran | gelen_ekran | ekran_degil; yoksa "")
+func evalScreen(key string) string {
+	var e struct{ Ekran string }
+	if b, err := os.ReadFile(evalFile(key)); err == nil {
+		json.Unmarshal(b, &e)
+	}
+	return e.Ekran
 }
 
 // countLaughs: resim geldikten sonra laughMin dakika içinde aynı sohbette benim gülen mesajlarım
@@ -425,7 +514,7 @@ func score(db *sql.DB) {
 		var e struct {
 			Onem, Ikoniklik, Insta float64
 			NeVar                  string `json:"ne_var"`
-			Tur                    string
+			Tur, Ekran             string
 		}
 		b, _ := os.ReadFile(f)
 		if json.Unmarshal(b, &e) != nil {
@@ -433,8 +522,10 @@ func score(db *sql.DB) {
 		}
 		key := strings.TrimSuffix(filepath.Base(f), ".json")
 		s := sigs[key]
-		if e.Tur == "belge" || e.Tur == "ekran görüntüsü" { // belge fotosunun kopyası anı sayılmaz
-			s.Copies = 0
+		// belge/ekran görüntüsünün kopyası anı sayılmaz; Haiku "ekran_degil" dediyse ss değildir
+		shot := e.Ekran == "kendi_ekran" || e.Ekran == "gelen_ekran" || e.Ekran == "" && e.Tur == "ekran görüntüsü"
+		if e.Tur == "belge" || shot {
+			s.Copies, s.Days = 0, 0
 		}
 		p := (e.Onem+e.Ikoniklik+e.Insta)/3 + s.bonus()
 		day := strs(db, `SELECT local_date FROM event WHERE external_id = ?`, key)

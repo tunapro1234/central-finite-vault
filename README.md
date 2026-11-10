@@ -149,9 +149,16 @@ davranış sinyalleri. LLM önce gerekçesini (düşünce izi) yazar, sonra `kal
 Sinyaller (`./bin/photos signals`, Tuna'nın davranışından; Fotoğraflar/WhatsApp verisi veri
 ajanının `photos-meta.sqlite` çıkarımından):
 - **favori** +1.5; art arda ≥20 favorinin içindeyse yarısı (toplu yanlış favorileme)
-- **kopya**: aynı görüntü (256 bit dHash, Hamming ≤24; ekran görüntüleri hariç) galeride kaç kez
-  var. İlk-son kopya arası ≥30 gün ise her ek kopya +0.5 (en çok +2); yakın tarihli kopyalar seri
-  çekimdir, belge/ekran görüntüsü kopyaları sayılmaz
+- **kopya/türev** (tek kural): küme = foto + aynı görüntünün kopyaları (256 bit dHash, Hamming ≤24) +
+  türevleri (`uv run src/photos/derive.py match` → `derivs.tsv`: ekran görüntüsünde geçmesi, WhatsApp'tan
+  yeniden kaydı, kırpılmış/kesilmiş/düzenlenmiş hali; CLIP adayı + SIFT/RANSAC + piksel kaplaması, örnekte
+  ~%84 kesin). Ölçü: kaynağın (kümenin en eski fotosu) günü dışında kaç farklı günde yeniden kaydedilmiş/
+  ekran görüntüsü alınmış. İlk-son arası ≥30 gün ise farklı gün başına +0.5 (en çok +2); aynı gün 10
+  ekran görüntüsü 1 gün sayılır. Aynı anın başka kareleri birleştirilmez. Kaynak arayüz görüntüsüyse
+  (PNG, telefon ekranı oranı, ekran görüntüsü) ya da foto belge/ekran görüntüsü olarak puanlandıysa bonus yok
+- **ekran görüntüsü**: iPhone bayrağı ekranın/kâğıdın fotoğrafını da kapsıyor (örnekte %15); kartta
+  `src/photos/apps.py` tahmini ipucu olarak durur, Haiku `ekran: kendi_ekran | gelen_ekran | ekran_degil`
+  der; `ekran_degil` ise ekran görüntüsü sayılmaz
 - **açma/paylaşma**: log2(1+açılma)/4 (en çok +1.5), paylaşma başına +0.5 (en çok +1)
 - **elle emek**: açıklama yazdın +1, kendi Anı'na koydun +1, düzenledin +0.5; Apple öne çıkardı +0.5
 - **WhatsApp**: gönderdiğin her sohbet +0.5 (en çok +1.5), gönderdiğinde aldığı her tepki +0.25

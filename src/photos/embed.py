@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.12"
-# dependencies = ["sentence-transformers>=6.2", "torch==2.15.0", "sqlite-vec", "pillow"]
+# dependencies = ["sentence-transformers>=6.2", "torch==2.15.0", "sqlite-vec", "pillow", "pillow-heif>=1.8"]
 # ///
 """Foto vektör veritabanı (CLIP, işlemcide) + sticker → kaynak foto eşleme.
 
@@ -13,12 +13,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import sqlite_vec
+import torch
 from PIL import Image
 from sentence_transformers import SentenceTransformer
 
 DATA = Path(os.environ.get("CFV_DATA", "data"))
 OUT = DATA / "processed" / "photos"
 SMALL = OUT / "small"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MATCH = 0.88  # sticker ↔ foto aday eşiği; ≥0.95 neredeyse hep doğru, altını Haiku doğrular (kaynak_foto)
 
 
@@ -54,26 +56,55 @@ def md5(p):
     return hashlib.md5(Path(p).read_bytes()).hexdigest()[:16]
 
 
+def fname(k):
+    """UUID'siz medyanın anahtarı 'file:<yol>' → dosya adında : ve / olmaz."""
+    return k.replace(":", "-").replace("/", "_")
+
+
 def small(k, p):
     """224 px JPEG (şeffaf sticker beyaza basılır)."""
-    dst = SMALL / f"{k}.jpg"
+    dst = SMALL / f"{fname(k)}.jpg"
     if not dst.exists():
         r = subprocess.run(["vips", "thumbnail", p, f"{dst}[Q=85,background=255]", "224", "--height", "224"],
                            capture_output=True)
-        if r.returncode:
+        if r.returncode and not pil_thumb(p, dst, (224, 224), quality=85):
             return None
     return dst
+
+
+def pil_thumb(p, dst, box, **kw):
+    """vips'in açamadığı HEIC (derinlik haritalı Portre; sistem libheif 1.17 eski) → pillow-heif ile küçült."""
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+    try:
+        im = Image.open(p)
+        im.thumbnail(box)
+        tmp = dst.with_suffix(".tmp.jpg")
+        im.convert("RGB").save(tmp, "JPEG", **kw)
+        tmp.rename(dst)
+        return True
+    except Exception as e:
+        print(f"{p}: {e}", file=sys.stderr)
+        return False
 
 
 def embed():
     SMALL.mkdir(parents=True, exist_ok=True)
     db = vecdb()
-    have = {k for (k,) in db.execute("SELECT key FROM item")}
-    todo = [it for it in items() if it[0] not in have]
-    print(f"{len(have)} vektör var, {len(todo)} yeni", file=sys.stderr)
+    have = dict(db.execute("SELECT key, path FROM item"))
+    todo = [it for it in items() if it[0] not in have or it[1] == "photo" and have[it[0]] != it[2]]
+    moved = [it for it in todo if it[0] in have]  # dosyası değişmiş: eski vektör silinir, eski küçük resim kenara
+    for k, _, _ in moved:
+        db.execute("DELETE FROM vec WHERE rowid = (SELECT id FROM item WHERE key = ?)", (k,))
+        db.execute("DELETE FROM item WHERE key = ?", (k,))
+        if (s := SMALL / f"{fname(k)}.jpg").exists():
+            (OUT / "small-eski").mkdir(exist_ok=True)
+            s.rename(OUT / "small-eski" / f"{fname(k)}.{int(s.stat().st_mtime)}.jpg")
+    db.commit()
+    print(f"{len(have)} vektör var, {len(todo) - len(moved)} yeni, {len(moved)} dosyası değişmiş", file=sys.stderr)
     with ThreadPoolExecutor(4) as ex:
         smalls = list(ex.map(lambda it: small(it[0], it[2]), todo))
-    model = SentenceTransformer("clip-ViT-B-32", device="cpu")
+    model = SentenceTransformer("clip-ViT-B-32", device=DEVICE)
     todo = [(it, s) for it, s in zip(todo, smalls) if s]
     for i in range(0, len(todo), 256):
         chunk = todo[i:i + 256]
@@ -114,7 +145,7 @@ def stickers():
 
 def search(q, n=20):
     vdb = vecdb()
-    e = SentenceTransformer("sentence-transformers/clip-ViT-B-32-multilingual-v1", device="cpu").encode(
+    e = SentenceTransformer("sentence-transformers/clip-ViT-B-32-multilingual-v1", device=DEVICE).encode(
         q, normalize_embeddings=True)
     for key, path, dist in vdb.execute("""SELECT i.key, i.path, v.distance FROM vec v JOIN item i ON i.id = v.rowid
             WHERE v.embedding MATCH ? AND k = ? ORDER BY v.distance""", (e.astype("float32").tobytes(), n)):
