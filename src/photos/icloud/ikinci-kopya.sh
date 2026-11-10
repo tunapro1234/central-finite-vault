@@ -9,6 +9,7 @@
 #           ikinci-kopya.sh dogrula  yalnız checksum doğrulaması (rsync -anc --itemize, fark=0 olmalı)
 # Doğrulama farkı otomatik DÜZELTMEZ: depo1'de bozulan dosya -c ile iyi kopyanın üzerine yazılırdı.
 # Fark/az yer (<IKINCI_MIN_GB, 20) → bp msg cfv-photos + server-cfv.
+# Çıkış: 0 tamam/kilit dolu, 3 hedef disk yok, 5 kilit dosyası açılamadı, diğer: rsync rc / doğrulama farkı.
 set -u
 MOD=${1:-kopya}
 . "$(dirname "$0")/ortam.sh"
@@ -20,7 +21,10 @@ trap 'rm -f "$LISTE"' EXIT
 
 mountpoint -q "$(dirname "$(dirname "$HEDEF")")" || { alarm "hedef disk bağlı değil: $HEDEF (kopya yapılmadı)"; exit 3; }
 mkdir -p "$ST"
-exec 8>"$ST/.ikinci-kilit"; flock -n 8 || exit 0
+# Kilit: dolu → başka tur çalışıyor (normal, rc 0). Açılamıyor (izin vb.) → hata (rc 5); sessiz geçme.
+not() { echo "=== $1 $(date '+%F %T') ===" 2>/dev/null >>"$LOG" || logger -t cfv-ikinci "$1"; echo "ikinci-kopya: $1" >&2; }
+{ exec 8>"$ST/.ikinci-kilit"; } 2>/dev/null || { not "kilit dosyası açılamadı: $ST/.ikinci-kilit (kullanıcı $(id -un)); çıkılıyor"; exit 5; }
+flock -n 8 || { not "başka bir ikinci-kopya turu çalışıyor (kilit dolu); çıkılıyor"; exit 0; }
 mkdir -p "$HEDEF"
 
 {
