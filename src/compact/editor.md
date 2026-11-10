@@ -29,4 +29,4 @@ Hangi aralığın bölüneceğine kod karar verir. Program: `./bin/compact` (yok
 
 ## Bitince
 `uv run cfv ingest reports && uv run cfv tree` çalıştır, sonra
-`bp msg cfv 'editor: <n> rapor yazıldı (katmanlara göre); hata: ...'`.
+`bp msg server-cfv 'editor: <n> rapor yazıldı (katmanlara göre); hata: ...'`.

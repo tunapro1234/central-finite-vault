@@ -11,4 +11,4 @@ Döngü:
 3. Alt ajan bitince 1'e dön. Mesajda bir paket sınırı verildiyse o kadar paketten sonra dur.
 
 Kurallar: Yalnız `data/processed/photos/` altına yazılır. Repo koduna, `data/raw/`'a, git'e dokunma.
-Bitince ya da bir şey ters giderse: `bp msg cfv 'photo-<k>: <n> paket bitti; hata: ...'`.
+Bitince ya da bir şey ters giderse: `bp msg server-cfv 'photo-<k>: <n> paket bitti; hata: ...'`.

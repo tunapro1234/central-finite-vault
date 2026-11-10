@@ -6,7 +6,7 @@ projeler, takvim) birlikte simüle eden bir **world model**: ben + env birlikte 
 
 ## Ajanlar (bp)
 - `cfv-predict` (koordinatör): ortak altyapıyı (veri seti, değerlendirme) kurar, yaklaşımları
-  karşılaştırır, sonuçları `bp msg cfv` ile bildirir. Alt ajanları o açar ve yönetir.
+  karşılaştırır, sonuçları `bp msg server-cfv` ile bildirir. Alt ajanları o açar ve yönetir.
 - `cfv-predict-markov`: Markov zincirleri (1-2. derece, saat/gün bağlamlı, backoff) + tahmin
   tavanı (Song ve ark. 2010: Lempel-Ziv entropisi + Fano). En güçlü basit rakip.
 - `cfv-predict-life2vec`: olay embedding'leri (tür/kişi/sohbet tabloları, döngüsel zaman + log Δt,
