@@ -10,6 +10,8 @@ Type=oneshot
 User=tunapro
 # ICLOUD_USER burada (repo dışında, root 600)
 EnvironmentFile=/etc/cfv-icloudpd.env
+# bp msg hedefi server-cfv ve altı (cfv-photos) ile sınırlı; imza [service:<birim>]
+Environment=BP_OWNER=server-cfv
 ExecStart=/srv/central-finite-vault/src/photos/icloud/cfv-icloudpd.sh %i
 # + = root: sayım/durum satırı ve bp alarmı (arşive yazmaz)
 ExecStopPost=+/srv/central-finite-vault/src/photos/icloud/kontrol.sh

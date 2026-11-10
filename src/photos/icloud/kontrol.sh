@@ -1,7 +1,7 @@
 #!/bin/bash
 # cfv-icloudpd turu bitince çalışır (systemd ExecStopPost=+, root). Salt okur; arşive yazmaz.
 # Günlük satırı → $DURUM/gunluk.tsv; sorun varsa bp ile haber verir.
-# Ortam: ortam.sh'teki yollar, CFV_ALARM_TO (varsayılan cfv-photos)
+# Ortam: ortam.sh'teki yollar, CFV_ALARM_TO (varsayılan cfv-photos), CFV_DENEME=1 (mesaja DENEME öneki)
 set -u
 . "$(dirname "$0")/ortam.sh"
 TO=${CFV_ALARM_TO:-cfv-photos}
@@ -52,7 +52,7 @@ if [ -d "$HEDEF" ]; then
 fi
 
 if [ ${#sorun[@]} -gt 0 ]; then
-  msg="[cfv-icloudpd kontrol] $(IFS='; '; echo "${sorun[*]}"). medya=$medya indirilen=$indirilen. Log: $LOG"
+  msg="[cfv-icloudpd kontrol]${CFV_DENEME:+ DENEME (sahte sorun, gerçek değil):} $(IFS='; '; echo "${sorun[*]}"). medya=$medya indirilen=$indirilen. Log: $LOG"
   "$BP" msg "$TO" "$msg" >/dev/null 2>&1 || logger -t cfv-icloudpd "$msg"
   case "$msg" in *depo4*) "$BP" msg server-cfv "$msg" >/dev/null 2>&1 ;; esac
   if [ "$sonuc" = giris-gerekiyor ]; then
