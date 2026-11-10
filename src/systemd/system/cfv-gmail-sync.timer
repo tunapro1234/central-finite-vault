@@ -1,8 +1,8 @@
 [Unit]
-Description=CFV: Gmail senkronu her gün 06:45
+Description=CFV: Gmail senkronu her gün 05:20 (borg penceresi 03:15-05:15 sonrası)
 
 [Timer]
-OnCalendar=*-*-* 06:45
+OnCalendar=*-*-* 05:20
 RandomizedDelaySec=5min
 Persistent=true
 
