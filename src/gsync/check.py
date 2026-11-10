@@ -6,9 +6,12 @@ Bakılanlar (data/raw/google-calendar/, data/raw/gmail/<hesap>/ state.json + ver
           takvim sayısı önceki kontrolden az değil, olay sayısı önceki kontrolün %95'inden az değil
   gmail (data/config/gmail-accounts): last_fetch < 26 sa, failures = 0, total azalmamış
 Her gün data/logs/gsync-check.jsonl'a bir satır. Sorun varsa `bp msg server-cfv`;
-bp gönderemezse (systemd'de gönderen kimliği yok) journal'a `logger` + laptop-notify;
+(systemd'den "[service:cfv-gsync-check]" imzasıyla, BP_OWNER=server-cfv).
+bp gönderemezse journal'a `logger` + laptop-notify;
 3 kontrol üst üste sorunluysa her durumda laptop-notify. Sorun yoksa sessiz.
-Kullanım: check.py [--dry-run]  (dry-run: yazmaz, mesaj atmaz, sonucu basar)
+Kullanım: check.py [--dry-run | --test-alert]
+  --dry-run:    yazmaz, mesaj atmaz, sonucu basar
+  --test-alert: veriye/log'a dokunmadan uyarı yolunu "DENEME" mesajıyla dener (bp → yedek yol)
 """
 from __future__ import annotations
 
@@ -93,7 +96,23 @@ def check(now: dt.datetime, prev: dict) -> dict:
             "streak": streak, "gcal": cal, "gmail": gm}
 
 
+def alert(msg: str, streak: int) -> bool:
+    """bp msg server-cfv; olmazsa journal + laptop. bp gönderdiyse True."""
+    sent = subprocess.run(["bp", "msg", "server-cfv", msg[:1500]], check=False,
+                          capture_output=True).returncode == 0
+    if not sent:  # bp gönderemezse (eski bp / kimlik yok) → journal + laptop
+        subprocess.run(["logger", "-t", "cfv-gsync-check", msg[:1500]], check=False)
+    if not sent or streak >= NOTIFY_AFTER:
+        subprocess.run(["laptop-notify", "cfv senkron bozuk", f"{streak} gündür sorun: {msg[:300]}",
+                        "normal"], check=False)
+    return sent
+
+
 def main() -> int:
+    if "--test-alert" in sys.argv:
+        sent = alert("DENEME (cfv-gsync-check uyarı yolu sınaması, gerçek sorun yok)", 0)
+        print("bp gönderdi" if sent else "bp gönderemedi → logger + laptop-notify")
+        return 0 if sent else 1
     dry = "--dry-run" in sys.argv
     log = DATA / "logs" / "gsync-check.jsonl"
     now = dt.datetime.now(dt.timezone.utc).replace(microsecond=0)
@@ -107,13 +126,7 @@ def main() -> int:
         f.write(json.dumps(r, ensure_ascii=False) + "\n")
     if r["problems"]:
         msg = "cfv gsync-check SORUN: " + " | ".join(r["problems"]) + f" (ayrıntı: {log})"
-        sent = subprocess.run(["bp", "msg", "server-cfv", msg[:1500]], check=False,
-                              capture_output=True).returncode == 0
-        if not sent:  # systemd içinden bp gönderen kimliği bulamayabilir → journal + laptop
-            subprocess.run(["logger", "-t", "cfv-gsync-check", msg[:1500]], check=False)
-        if not sent or r["streak"] >= NOTIFY_AFTER:
-            subprocess.run(["laptop-notify", "cfv senkron bozuk",
-                            f"{r['streak']} gündür sorun: {r['problems'][0][:300]}", "normal"], check=False)
+        alert(msg, r["streak"])
     return 0
 
 
