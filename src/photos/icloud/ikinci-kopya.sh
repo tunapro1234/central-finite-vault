@@ -35,11 +35,18 @@ dogrula() {
   local out; out=$(mktemp)
   echo "=== checksum doğrulama $(wc -l <"$LISTE") dosya $(date '+%F %T') ===" >>"$LOG"
   ionice -c3 nice -n 15 rsync -anc --itemize-changes --files-from="$LISTE" "$DIR/" "$HEDEF/" >"$out" 2>>"$LOG"
-  local rc=$? n; n=$(grep -c '^[<>ch.]f' "$out")   # yalnız dosya satırları (dizin mtime satırları fark değil)
+  local rc=$? icerik eksik oznitelik
+  # itemize: 'YXcstpoguax'. Dosya satırları:
+  #   3. sütun 'c' → içerik farkı (asıl alarm)
+  #   '+++++++++' → hedefte yok (henüz kopyalanmamış)
+  #   diğerleri → yalnız mtime/izin farkı (içerik aynı)
+  icerik=$(grep -c '^[<>.]fc' "$out"); eksik=$(grep -c '^[<>c]f+++++++++' "$out")
+  oznitelik=$(( $(grep -c '^[<>ch.]f' "$out") - icerik - eksik ))
   cat "$out" >>"$LOG"; rm -f "$out"
-  echo "=== doğrulama bitti rc=$rc fark=$n $(date '+%F %T') ===" >>"$LOG"
-  [ "$rc" -eq 0 ] && [ "$n" -eq 0 ] || alarm "checksum doğrulaması: rc=$rc fark=$n (düzeltilmedi; ayrıntı $LOG)"
-  return $(( rc || n ))
+  echo "=== doğrulama bitti rc=$rc icerik_farki=$icerik hedefte_yok=$eksik yalniz_oznitelik=$oznitelik $(date '+%F %T') ===" >>"$LOG"
+  [ "$rc" -eq 0 ] && [ "$icerik" -eq 0 ] && [ "$eksik" -eq 0 ] ||
+    alarm "checksum doğrulaması: rc=$rc içerik_farkı=$icerik hedefte_yok=$eksik yalnız_öznitelik=$oznitelik (düzeltilmedi; ayrıntı $LOG)"
+  return $(( rc || icerik || eksik ))
 }
 
 if [ "$MOD" = dogrula ]; then dogrula; exit $?; fi
