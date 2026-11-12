@@ -1,6 +1,7 @@
 """Tazelik denetimi: kaynak başına son ham veri + DB'deki son olay; eşik aşılırsa bp msg server-cfv.
 
-Eşikler (server-cfv, 2026-11-10): foto > 2 gün, takvim > 1 gün, gmail > 2 gün, iPhone yedeği > 8 gün;
+Eşikler (server-cfv, 2026-11-10/12): foto indirici son başarılı tur > 36 sa ya da son tur giriş/hata → hemen;
+iCloud'da en yeni çekim > 5 gün (telefon senkronu; indirici sağlamken), takvim > 1 gün, gmail > 2 gün, iPhone yedeği > 8 gün;
 ham veride olup DB'ye girmemiş öğe > 1 gün (ingest bozuk). Çekimin kendi hatası (token, ağ) gsync-check / icloud
 kontrol'ün işi; burası "ham veri geldi mi, DB'ye girdi mi"ye bakar.
 Aynı sorun tekrar ederse ilk gün + 3 günde bir hatırlatılır (data/logs/akis-uyari.json).
@@ -21,7 +22,8 @@ from cfv.ingest import DONE_MARK, iphone_extract, snapshot_date
 from akis import sayim
 
 DAY = dt.timedelta(days=1)
-LIMITS = {"foto": 2 * DAY, "takvim": 1 * DAY, "gmail": 2 * DAY, "iphone": 8 * DAY}
+HOUR = dt.timedelta(hours=1)
+LIMITS = {"foto": 5 * DAY, "foto-indirici": 36 * HOUR, "takvim": 1 * DAY, "gmail": 2 * DAY, "iphone": 8 * DAY}
 LAG = 1 * DAY
 REMIND = 3 * DAY
 BACKUP_DIR_MAX = 20 * 2**30      # processed/yedek + photos/yedek-gunluk toplamı
@@ -94,12 +96,28 @@ def evaluate(cfv_db: Path | None = None, now: dt.datetime | None = None) -> dict
     ok = [r for r in rows if r.get("sonuc") == "tamam"]
     fetched = _t(ok[-1]["zaman"]) if ok else None
     newest = _t(ok[-1].get("en_yeni_cekim")) if ok else None
+    last_run = rows[-1] if rows else {}
     db_last = _t(last.get("iphone-photos"))
-    out["foto"] = {"son_cekim_turu": fetched, "ham_en_yeni": newest, "db_son_olay": db_last}
-    if _age(now, fetched) is None or _age(now, fetched) > LIMITS["foto"]:
-        problems.append(("foto-cekim", f"foto: son başarılı çekim turu {_fmt_age(_age(now, fetched))} önce"))
-    if newest and now - newest > LIMITS["foto"] + DAY:  # en_yeni_cekim gün hassasiyetinde
-        problems.append(("foto-yeni", f"foto: arşivdeki en yeni çekim {_d(newest)} (> 2 gün)"))
+    out["foto"] = {"son_cekim_turu": fetched, "son_tur_sonucu": last_run.get("sonuc"), "ham_en_yeni": newest,
+                   "db_son_olay": db_last}
+    # 1) indirici düştü mü (sunucu sorunu → hemen): son tur giriş/hata ya da başarılı tur 36 sa'ten eski
+    downloader_ok = True
+    if last_run.get("sonuc") == "giris-gerekiyor":
+        downloader_ok = False
+        problems.append(("foto-oturum", f"foto: iCloud oturumu geçersiz (son tur {last_run.get('zaman')}) — "
+                                        "Tuna'nın giris.sh ile yeniden girmesi gerek"))
+    elif last_run.get("sonuc") not in (None, "tamam", "atlandi"):
+        downloader_ok = False
+        problems.append(("foto-indirici-hata", f"foto: indiricinin son turu başarısız ({last_run.get('sonuc')}, "
+                                               f"{last_run.get('zaman')})"))
+    if _age(now, fetched) is None or _age(now, fetched) > LIMITS["foto-indirici"]:
+        downloader_ok = False
+        problems.append(("foto-cekim", f"foto: indiricinin son başarılı turu {_fmt_age(_age(now, fetched))} önce "
+                                       "(indirici çalışmıyor)"))
+    # 2) indirici sağlam ama iCloud'da yeni foto yok → telefon tarafı; 2 gün fotosuz olağan, eşik 5 gün
+    if downloader_ok and newest and (now.astimezone().date() - newest.astimezone().date()) > LIMITS["foto"]:
+        problems.append(("foto-yeni", f"foto: iCloud'da {_d(newest)} sonrası çekilmiş foto yok (indirici çalışıyor, "
+                                      "oturum geçerli) — telefonda iCloud Fotoğraflar senkronunu kontrol et"))
     if newest and (db_last is None or db_last < newest - LAG):
         problems.append(("foto-db", f"foto: arşivde {_d(newest)} var, DB'deki son foto "
                                     f"{_d(db_last)}" if db_last else "foto: DB'de foto yok"))

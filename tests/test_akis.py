@@ -144,3 +144,40 @@ def test_gun_ignores_dream(data):
     assert gun.close_days(p, now)["revize"] == []
     with sqlite3.connect(gun.path()) as c:
         assert "dream" not in c.execute("SELECT kaynak_sayilari FROM gun WHERE tarih='2026-11-08'").fetchone()[0]
+
+
+def _foto_durum(data, monkeypatch, rows):
+    from akis import tazelik
+    p = data / "gunluk.tsv"
+    hdr = "zaman\tkip\tsonuc\tindirilen\tmedya\txmp\tmedyasiz_xmp\tyarim\tbayt\ten_yeni_cekim"
+    p.write_text("\n".join([hdr] + ["\t".join(r) for r in rows]) + "\n")
+    monkeypatch.setattr(tazelik, "FOTO_DURUM", p)
+    if not (data / "c.sqlite").exists():
+        conn = _db(data / "c.sqlite")
+        with conn:
+            Batch(conn, "iphone-photos", data / "raw/x", "t").event("u1", "photo",
+                                                                    dt.datetime(2026, 11, 9, 9, tzinfo=UTC))
+        conn.close()
+    return lambda now: {k: v for k, v in tazelik.evaluate(data / "c.sqlite", now)["sorunlar"] if k.startswith("foto")}
+
+
+def _row(zaman, sonuc, en_yeni="2026-11-09"):
+    return (zaman, "gunluk", sonuc, "0", "1", "1", "0", "0", "1", en_yeni)
+
+
+def test_foto_tazelik(data, monkeypatch):
+    rows = [_row("2026-11-11 05:24:22", "tamam"), _row("2026-11-12 05:25:28", "tamam")]
+    ev = _foto_durum(data, monkeypatch, rows)
+    assert ev(dt.datetime(2026, 11, 12, 3, tzinfo=UTC)) == {}            # 3 gün fotosuz: olağan
+    rows += [_row(f"2026-11-{d} 05:25:00", "tamam") for d in (13, 14, 15)]
+    ev = _foto_durum(data, monkeypatch, rows)
+    out = ev(dt.datetime(2026, 11, 15, 3, tzinfo=UTC))                   # 11-15: 6 gün → telefon senkronu
+    assert list(out) == ["foto-yeni"] and "senkronunu kontrol et" in out["foto-yeni"]
+    # oturum düştü: ayrı anahtar, hemen; telefon mesajı verilmez
+    ev = _foto_durum(data, monkeypatch, rows[:2] + [_row("2026-11-13 05:25:00", "giris-gerekiyor", "")])
+    assert list(ev(dt.datetime(2026, 11, 13, 3, tzinfo=UTC))) == ["foto-oturum"]
+    # indirici hiç koşmadı (son başarılı tur > 36 sa)
+    ev = _foto_durum(data, monkeypatch, rows[:2])
+    assert list(ev(dt.datetime(2026, 11, 13, 20, tzinfo=UTC))) == ["foto-cekim"]
+    ev = _foto_durum(data, monkeypatch, rows[:2] + [_row("2026-11-13 05:25:00", "hata(1)", "")])
+    assert list(ev(dt.datetime(2026, 11, 13, 3, tzinfo=UTC))) == ["foto-indirici-hata"]
