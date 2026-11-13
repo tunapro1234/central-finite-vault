@@ -236,3 +236,14 @@ def test_gun_ignores_volatile_and_migrates(data, monkeypatch):
     write("2026-11-11T04:55Z", "uyan!")   # seri dokunuldu, yalnız updated oynadı → revizyon yok
     r = gun.close_days(p, now)
     assert r["revize"] == [] and "imza_gecis" not in r
+
+
+def test_gercek_veri_korumasi(monkeypatch):
+    """conftest koruması: veri kökü gerçek veriye çözülürse yazmadan önce durur (2026-11-13 kazası)."""
+    from akis import gun
+    monkeypatch.delenv("CFV_DATA")                                 # repo/data → /mnt/depo1/cfv/data symlink'i
+    with pytest.raises(pytest.exit.Exception):
+        gun.path()
+    monkeypatch.setenv("CFV_DATA", "/mnt/depo1/cfv/data")
+    with pytest.raises(pytest.exit.Exception):
+        db.default_db_path()
