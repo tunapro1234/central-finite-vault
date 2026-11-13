@@ -29,14 +29,30 @@ uyari=$(grep -cE '^[0-9-]+ [0-9:]+ WARNING ' <<<"$run")
 mkdir -p "$DURUM"
 # Medyasız .xmp (kuru tur / eksik dosya için icloudpd'nin bıraktığı) ayrı sayılır ve listelenir; silinmez.
 ORPHANS=$DURUM/medyasiz-xmp.txt
-read -r medya xmp yarim bayt enyeni orphan < <(find "$DIR" -type f -printf '%T@ %s %p\n' 2>/dev/null | awk -v out="$ORPHANS.yeni" '
+# indir.py'nin .<ad>.cfv-part'ı: hedefi var ve içeriği birebir aynıysa (boyut + cmp) yarım değil "artık" (2026-11-13
+# izin hatası 97 tane bıraktı). Silinmez (Tuna onayı); listelenir, alarm yok.
+ARTIK=$DURUM/artik-part.txt
+rm -f "$ARTIK.aday"
+read -r medya xmp yarim bayt enyeni orphan < <(find "$DIR" -type f -printf '%T@ %s %p\n' 2>/dev/null | awk -v out="$ORPHANS.yeni" -v parts="$ARTIK.aday" '
   { t=$1; s=$2; p=substr($0, index($0, $3)); b+=s
     if (p ~ /\.xmp$/) { x++; X[substr(p, 1, length(p)-4)]=1 }
-    else if (p ~ /(\.part|-part)$/) y++
+    else if (p ~ /(\.part|-part)$/) { y++; if (p ~ /\/\.[^\/]+\.cfv-part$/) print p > parts }
     else { m++; M[p]=1; if (t>mx) mx=t } }
   END { for (k in X) if (!(k in M)) { o++; print k ".xmp" > out }
         printf "%d %d %d %d %d %d\n", m, x, y, b, mx, o }')
 [ -f "$ORPHANS.yeni" ] && sort "$ORPHANS.yeni" >"$ORPHANS" && rm -f "$ORPHANS.yeni" || : >"$ORPHANS"
+artik=0
+if [ -f "$ARTIK.aday" ]; then
+  while IFS= read -r t; do
+    b=$(basename "$t"); h="$(dirname "$t")/${b#.}"; h=${h%.cfv-part}
+    [ -f "$h" ] && [ "$(stat -c %s "$t")" = "$(stat -c %s "$h")" ] && nice -n 19 ionice -c3 cmp -s "$t" "$h" || continue
+    printf '%s\n' "$t"; artik=$((artik + 1))
+  done <"$ARTIK.aday" >"$ARTIK"
+  rm -f "$ARTIK.aday"
+  yarim=$((yarim - artik))
+else
+  : >"$ARTIK"
+fi
 enyeni_tarih=$(date -d "@${enyeni%.*}" '+%F' 2>/dev/null || echo ?)
 
 [ -s "$TSV" ] || printf 'zaman\tkip\tsonuc\tindirilen\tmedya\txmp\tmedyasiz_xmp\tyarim\tbayt\ten_yeni_cekim\n' >"$TSV"
@@ -49,6 +65,8 @@ sorun=()
 [ -n "$onceki" ] && [ "$medya" -lt "$onceki" ] && sorun+=("medya sayısı AZALDI: $onceki → $medya (biri sildi mi?)")
 [ "$uyari" -gt 0 ] && sorun+=("$uyari WARNING: dosya indi ama liste/mtime yazılamadı (izin?); log'a bak")
 [ "$yarim" -gt 0 ] && sorun+=("$yarim yarım dosya (.part/.cfv-part/.kv-part) duruyor")
+# artık (hedefle aynı) .cfv-part: alarm değil, durum satırı
+[ "$artik" -gt 0 ] && logger -t cfv-icloudpd "artık (hedefle aynı): $artik .cfv-part ($ARTIK)"
 # '-<boyut>' ekli dosya o boyutta değil (indir.py dokunmaz, rapora yazar) → elle bakılmalı
 yarimad=$(grep -c '^yarim' "$ST/farkli-$(date +%F).tsv" 2>/dev/null)
 [ "${yarimad:-0}" -gt 0 ] && sorun+=("$yarimad '-<boyut>' dosyası beklenen boyutta değil (farkli-$(date +%F).tsv)")
@@ -59,7 +77,7 @@ if [ -d "$HEDEF" ]; then
 fi
 
 if [ ${#sorun[@]} -gt 0 ]; then
-  msg="[cfv-icloudpd kontrol]${CFV_DENEME:+ DENEME (sahte sorun, gerçek değil):} $(IFS='; '; echo "${sorun[*]}"). medya=$medya indirilen=$indirilen. Log: $LOG"
+  msg="[cfv-icloudpd kontrol]${CFV_DENEME:+ DENEME (sahte sorun, gerçek değil):} $(IFS='; '; echo "${sorun[*]}"). medya=$medya indirilen=$indirilen$( [ "$artik" -gt 0 ] && echo " artık (hedefle aynı): $artik"). Log: $LOG"
   "$BP" msg "$TO" "$msg" >/dev/null 2>&1 || logger -t cfv-icloudpd "$msg"
   case "$msg" in *depo4*) "$BP" msg server-cfv "$msg" >/dev/null 2>&1 ;; esac
   if [ "$sonuc" = giris-gerekiyor ]; then
