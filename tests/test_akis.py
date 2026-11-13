@@ -181,3 +181,58 @@ def test_foto_tazelik(data, monkeypatch):
     assert list(ev(dt.datetime(2026, 11, 13, 20, tzinfo=UTC))) == ["foto-cekim"]
     ev = _foto_durum(data, monkeypatch, rows[:2] + [_row("2026-11-13 05:25:00", "hata(1)", "")])
     assert list(ev(dt.datetime(2026, 11, 13, 3, tzinfo=UTC))) == ["foto-indirici-hata"]
+
+
+def test_buyume_same_day_update_and_people(data):
+    from akis import buyume
+    buyume.append({"a": 10, "contacts": 0}, {"vektor": 3}, dt.date(2026, 11, 12))
+    buyume.append({"a": 10, "contacts": 0}, {"vektor": 3}, dt.date(2026, 11, 13), people={"rehber": 5})
+    before = buyume.path().read_text().splitlines()
+    # aynı gün elle yeniden tur: satır güncellenir, eski hâli buyume-degisen.tsv'de
+    line = buyume.append({"a": 14, "contacts": 0}, {"vektor": 3}, dt.date(2026, 11, 13),
+                         people={"rehber": 7, "numara": 6})
+    f = line.rstrip("\n").split("\t")
+    assert f[:4] == ["2026-11-13", "14", "+4", "a=14(+4)"] and "contacts" not in line
+    assert f[5] == "rehber=7 numara=6"   # önceki gün kisi boş → fark yok
+    after = buyume.path().read_text().splitlines()
+    assert after[:2] == before[:2] and len(after) == 3 and after[2] == line.rstrip("\n")
+    hist = (data / "logs" / "buyume-degisen.tsv").read_text().splitlines()
+    assert hist[0].startswith("degisti_at\ttarih") and hist[1].endswith(before[2])
+    assert buyume.append({"a": 14}, {"vektor": 3}, dt.date(2026, 11, 13), people={"rehber": 7, "numara": 6}) is None
+    assert [r["toplam"] for r in buyume.rows()] == [10, 14] and buyume.rows()[-1]["kisi"]["rehber"] == 7
+    line = buyume.append({"a": 14}, {"vektor": 3}, dt.date(2026, 11, 14), people={"rehber": 8, "numara": 6})
+    assert line.rstrip("\n").split("\t")[5] == "rehber=8(+1) numara=6(+0)"
+
+
+def test_gun_ignores_volatile_and_migrates(data, monkeypatch):
+    import functools
+    from akis import gun
+    p = data / "cfv.sqlite"
+    t1, t2 = dt.datetime(2026, 11, 5, 3, tzinfo=UTC), dt.datetime(2026, 11, 6, 3, tzinfo=UTC)
+
+    def write(upd, title2):
+        conn = _db(p) if not p.exists() else db.connect(p)
+        with conn:
+            b = Batch(conn, "calendar-google", data / "raw/gcal", "t")
+            b.event("r1_a", "calendar", t1, title="uyan", payload={"recurring": "r1", "updated": upd})
+            b.event("r1_b", "calendar", t2, title=title2, payload={"recurring": "r1", "updated": upd})
+        conn.close()
+    now = dt.datetime(2026, 11, 10, 4, tzinfo=UTC)
+    # eski formülle (surum 1) kapanmış günler
+    write("2026-11-10T06:18Z", "uyan")
+    orig_sig, orig_surum = gun.day_signatures, gun.IMZA_SURUM
+    # DİKKAT: monkeypatch.undo() kullanma — CFV_DATA da geri alınır, gerçek akis.sqlite'a yazılır (2026-11-13)
+    monkeypatch.setattr(gun, "IMZA_SURUM", "1")
+    monkeypatch.setattr(gun, "day_signatures", functools.partial(orig_sig, volatile=()))
+    gun.close_days(p, now)
+    monkeypatch.setattr(gun, "IMZA_SURUM", orig_surum)
+    monkeypatch.setattr(gun, "day_signatures", orig_sig)
+    assert gun.path().is_relative_to(data)
+    # geçiş turu: 11-05 aynı → sessizce yeni imza; 11-06'da başlık gerçekten değişti → revize
+    # (geçiş turunda updated da oynasaydı o gün bir kez revize olurdu; eski içerik bilinmiyor)
+    write("2026-11-10T06:18Z", "uyan!")
+    r = gun.close_days(p, now)
+    assert r["revize"] == ["2026-11-06"] and r["imza_gecis"] >= 1
+    write("2026-11-11T04:55Z", "uyan!")   # seri dokunuldu, yalnız updated oynadı → revizyon yok
+    r = gun.close_days(p, now)
+    assert r["revize"] == [] and "imza_gecis" not in r

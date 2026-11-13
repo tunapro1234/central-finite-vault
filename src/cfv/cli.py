@@ -100,9 +100,13 @@ def cmd_status(args):
     snaps = {k: (snap, imp) for k, _, snap, imp in sayim.sources(path)}
     print(f"{'kaynak':16} {'olay':>8}  {'son olay':10}  {'snapshot':20}  içe aktarıldı")
     for k in sorted(counts, key=lambda k: -counts[k]):
+        if k in buyume.NO_EVENTS:
+            continue
         snap, imp = snaps.get(k, (None, None))
         print(f"{k:16} {counts[k]:>8}  {(last.get(k) or '-')[:10]:10}  {(snap or '-')[:20]:20}  {(imp or '-')[:16]}")
     print(f"{'toplam':16} {sum(counts.values()):>8}")
+    kisi = buyume.kisi(sayim.alias_counts(path))
+    print("kişiler (olay değil): " + " · ".join(f"{k} {v}" for k, v in kisi.items()))
     print(f"foto türevleri: {sayim.photo_derivs()}")
     g = gun.summary()
     rev = ", ".join(f"{d} (r{r})" for d, r in g["revize_son"][-10:]) or "-"

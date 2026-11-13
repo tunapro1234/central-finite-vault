@@ -426,8 +426,8 @@ def nightly(args) -> int:
 
     # 7) büyüme + tazelik
     final = sayim.counts(live)
-    line = buyume.append(final, sayim.photo_derivs())
-    log(f"[büyüme] {line.strip() if line else 'bugünün satırı zaten var'}")
+    line = buyume.append(final, sayim.photo_derivs(), people=buyume.kisi(sayim.alias_counts(live)))
+    log(f"[büyüme] {line.strip() if line else 'bugünün satırı zaten aynı'}")
     ev = tazelik.evaluate(live)
     probs = ev["sorunlar"] + [(f"tur-{i}", p) for i, p in enumerate(run_problems)]
     send = tazelik.due(probs)

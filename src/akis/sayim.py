@@ -27,6 +27,12 @@ def alias_count(path: Path) -> int:
         return c.execute("SELECT count(*) FROM person_alias").fetchone()[0]
 
 
+def alias_counts(path: Path) -> dict[str, int]:
+    """person_alias.source_kind → satır sayısı (rehber: contacts = kayıt, phone = numara; olay değil)."""
+    with ro(path) as c:
+        return dict(c.execute("SELECT source_kind, count(*) FROM person_alias GROUP BY source_kind"))
+
+
 def last_events(path: Path, now: dt.datetime | None = None) -> dict[str, str | None]:
     """kaynak türü → geleceğe tarihli olmayan en son olayın start_utc'si."""
     now_s = (now or dt.datetime.now(dt.timezone.utc)).strftime("%Y-%m-%dT%H:%M:%SZ")
