@@ -199,3 +199,46 @@ def test_alert_never_sends_in_tests_and_marks_trial(env, monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST")                     # elle deneme gibi: başka CFV_DATA
     ruya.alert("x")
     assert sent[0][-1].startswith("DENEME x (log: ") and str(root.resolve()) in sent[0][-1]
+
+
+def _chatstorage(path, sessions, messages):
+    import sqlite3
+    path.parent.mkdir(parents=True)
+    c = sqlite3.connect(path)
+    c.executescript("""
+        CREATE TABLE ZWACHATSESSION (Z_PK INTEGER PRIMARY KEY, ZSESSIONTYPE INT, ZPARTNERNAME TEXT, ZCONTACTJID TEXT);
+        CREATE TABLE ZWAGROUPMEMBER (Z_PK INTEGER PRIMARY KEY, ZMEMBERJID TEXT, ZCONTACTNAME TEXT, ZFIRSTNAME TEXT);
+        CREATE TABLE ZWAPROFILEPUSHNAME (ZJID TEXT, ZPUSHNAME TEXT);
+        CREATE TABLE ZWAMEDIAITEM (Z_PK INTEGER PRIMARY KEY, ZMEDIALOCALPATH TEXT, ZTITLE TEXT, ZLATITUDE REAL, ZLONGITUDE REAL);
+        CREATE TABLE ZWAMESSAGE (Z_PK INTEGER PRIMARY KEY, ZSTANZAID TEXT, ZCHATSESSION INT, ZISFROMME INT,
+            ZMESSAGETYPE INT, ZMESSAGEDATE REAL, ZTEXT TEXT, ZGROUPMEMBER INT, ZSTARRED INT, ZMEDIAITEM INT);""")
+    c.executemany("INSERT INTO ZWACHATSESSION VALUES (?,?,?,?)", sessions)
+    c.executemany("INSERT INTO ZWAMESSAGE VALUES (?,?,?,1,0,815000000,?,NULL,0,NULL)", messages)
+    c.commit()
+    c.close()
+
+
+@pytest.mark.parametrize("cfg_jid", [JID, None])
+def test_iphone_whatsapp_skips_dream_group(env, cfg_jid):
+    """iPhone yedeği okuyucusu rüya grubunu atlar: JID config'teyse JID'le, yoksa grup adıyla."""
+    from cfv.sources import whatsapp
+    root, _ = env
+    if cfg_jid is None:
+        (root / "config" / "ruya.json").unlink()
+    shared = root / "raw/iphone/extract-2026-11-01" / whatsapp.SHARED[0]
+    _chatstorage(shared / "ChatStorage.sqlite",
+                 [(1, 1, "🌙 Rüya", JID), (2, 1, "Arkadaşlar", "555@g.us"), (3, 0, "Rüya", "905550000000@s.whatsapp.net")],
+                 [(1, "a", 1, "qwxzebra sentetik"), (2, "b", 2, "selam"), (3, "c", 3, "merhaba")])
+    conn = db.connect()
+    conn.executescript(db.schema_sql())
+    st = whatsapp.ingest(conn, shared)
+    assert st["skipped_dream"] == 1 and st["messages"] == 2
+    assert {r[0] for r in conn.execute("SELECT title FROM event WHERE kind='whatsapp'")} == {"Arkadaşlar", "Rüya"}  # DM "Rüya" kişi, kalır
+    assert not conn.execute("SELECT 1 FROM event WHERE body LIKE '%qwxzebra%'").fetchall()
+
+
+def test_is_dream_chat(env):
+    assert ruya.is_dream_chat(JID) and ruya.is_dream_chat(JID, "başka ad")
+    assert ruya.is_dream_chat("x@g.us", "🌙 Rüya") and ruya.is_dream_chat("x@g.us", "ruya 🌙")
+    assert not ruya.is_dream_chat("x@g.us", "Rüya", group=False)       # DM'de kişi adı
+    assert not ruya.is_dream_chat("x@g.us", "Rüya Grubu") and not ruya.is_dream_chat(None, None)

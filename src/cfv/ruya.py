@@ -47,6 +47,17 @@ def config() -> dict:
     return json.loads(p.read_text()) if p.exists() else {}
 
 
+def is_dream_chat(jid: str | None, name: str | None = None, group: bool = True) -> bool:
+    """Rüya grubu mu? WhatsApp okuyucuları (iPhone yedeği, köprü) bu sohbeti atlar; rüya metni
+    yalnız dream tablosuna girer. JID config'teyse JID'le; ad yedektir: yalnız grupta, emoji/boşluk/büyük
+    harf yok sayılıp "rüya" (DM'de "Rüya" bir kişi adı olabilir, ona dokunmaz)."""
+    if jid and jid == config().get("wa_jid"):
+        return True
+    if not (group and name):
+        return False
+    return "".join(c for c in name.casefold() if c.isalnum()) in ("rüya", "ruya")
+
+
 def log(msg: str) -> None:
     p = db.data_dir() / "logs" / "ruya.log"
     p.parent.mkdir(parents=True, exist_ok=True)

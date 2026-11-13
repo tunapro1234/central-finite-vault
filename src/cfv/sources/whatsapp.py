@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cfv.ingest import Batch, drop_other_snapshots, iphone_extract, open_ro, snapshot_of
+from cfv.ruya import is_dream_chat
 from cfv.timeutil import from_coredata
 
 IMPORTER = "cfv.sources.whatsapp@1"
@@ -26,7 +27,7 @@ def ingest(conn, shared: Path | None = None) -> dict:
     src = open_ro(db_path)
     batch = Batch(conn, "whatsapp", db_path, IMPORTER, snapshot=snapshot_of(db_path))
     drop_other_snapshots(conn, "whatsapp", batch.source_id)
-    stats = {"messages": 0, "skipped_system": 0, "chats": 0, "with_media": 0}
+    stats = {"messages": 0, "skipped_system": 0, "chats": 0, "with_media": 0, "skipped_dream": 0}
 
     sessions = {r["Z_PK"]: r for r in src.execute(
         "SELECT Z_PK, ZSESSIONTYPE, ZPARTNERNAME, ZCONTACTJID FROM ZWACHATSESSION")}
@@ -48,6 +49,9 @@ def ingest(conn, shared: Path | None = None) -> dict:
             ORDER BY m.ZMESSAGEDATE"""):
         s = sessions.get(r["ZCHATSESSION"])
         if s is None or s["ZSESSIONTYPE"] in SKIP_SESSIONS:
+            continue
+        if is_dream_chat(s["ZCONTACTJID"], s["ZPARTNERNAME"], s["ZSESSIONTYPE"] == 1):
+            stats["skipped_dream"] += 1  # rüya grubu: metin yalnız dream tablosunda (cfv.ruya)
             continue
         mtype = MSG_TYPE.get(r["ZMESSAGETYPE"], f"type{r['ZMESSAGETYPE']}")
         text = r["ZTEXT"]
