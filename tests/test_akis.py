@@ -247,3 +247,22 @@ def test_gercek_veri_korumasi(monkeypatch):
     monkeypatch.setenv("CFV_DATA", "/mnt/depo1/cfv/data")
     with pytest.raises(pytest.exit.Exception):
         db.default_db_path()
+
+
+def test_wa_kopru_tazelik(data, monkeypatch):
+    from akis import tazelik
+    from cfv.sources import whatsapp_kopru
+    store = data / "messages.jsonl"
+    store.write_text('{"ts": "2026-11-13T06:00:00.000Z", "id": "a"}\n{"ts": "2026-11-13T09:00:00.000Z", "id": "b"}\n'
+                     '{"ts": "2026-11-13T09:0')                           # yarım son satır yok sayılır
+    monkeypatch.setattr(whatsapp_kopru, "STORE", store)
+    conn = _db(data / "c.sqlite")
+    conn.close()
+
+    def wa(now):
+        return [k for k, _ in tazelik.evaluate(data / "c.sqlite", now)["sorunlar"] if k == "wa-kopru"]
+    assert tazelik._last_line_ts(store) == dt.datetime(2026, 11, 13, 9, tzinfo=UTC)
+    assert wa(dt.datetime(2026, 11, 14, 8, tzinfo=UTC)) == []
+    assert wa(dt.datetime(2026, 11, 14, 10, tzinfo=UTC)) == ["wa-kopru"]
+    monkeypatch.setattr(whatsapp_kopru, "STORE", data / "yok.jsonl")
+    assert wa(dt.datetime(2026, 11, 14, 8, tzinfo=UTC)) == ["wa-kopru"]

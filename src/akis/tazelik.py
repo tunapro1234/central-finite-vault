@@ -23,7 +23,7 @@ from akis import sayim
 
 DAY = dt.timedelta(days=1)
 HOUR = dt.timedelta(hours=1)
-LIMITS = {"foto": 5 * DAY, "foto-indirici": 36 * HOUR, "takvim": 1 * DAY, "gmail": 2 * DAY, "iphone": 8 * DAY}
+LIMITS = {"wa-kopru": 1 * DAY, "foto": 5 * DAY, "foto-indirici": 36 * HOUR, "takvim": 1 * DAY, "gmail": 2 * DAY, "iphone": 8 * DAY}
 LAG = 1 * DAY
 REMIND = 3 * DAY
 BACKUP_DIR_MAX = 20 * 2**30      # processed/yedek + photos/yedek-gunluk toplamı
@@ -76,6 +76,24 @@ def _dir_size(*ds: Path) -> int:
                 except OSError:
                     pass
     return n
+
+
+def _last_line_ts(p: Path) -> dt.datetime | None:
+    """jsonl'in son tam satırının 'ts'i (sondan okur; dosya büyük olabilir)."""
+    try:
+        with open(p, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            end = f.tell()
+            f.seek(max(0, end - 65536))
+            lines = f.read().split(b"\n")
+    except OSError:
+        return None
+    for raw in reversed(lines[1:] if len(lines) > 1 else lines):
+        try:
+            return _t(json.loads(raw).get("ts"))
+        except (ValueError, AttributeError):
+            continue
+    return None
 
 
 def evaluate(cfv_db: Path | None = None, now: dt.datetime | None = None) -> dict:
@@ -176,6 +194,14 @@ def evaluate(cfv_db: Path | None = None, now: dt.datetime | None = None) -> dict
         if stale:
             problems.append(("iphone-db", f"iPhone: {ext.name} var ama DB'de eski snapshot: {', '.join(stale)}"))
 
+    # --- WhatsApp köprüsü: store'un son satırı (köprü servisi bp daemon'un, server-whatsapp'ın; yalnız haber)
+    from cfv.sources import whatsapp_kopru
+    wa_last = _last_line_ts(whatsapp_kopru.STORE)
+    out["wa_kopru"] = {"store_son": wa_last, "db_son_olay": _t(last.get("whatsapp-kopru"))}
+    if _age(now, wa_last) is None or _age(now, wa_last) > LIMITS["wa-kopru"]:
+        problems.append(("wa-kopru", f"WhatsApp köprüsü: store'un son mesajı {_fmt_age(_age(now, wa_last))} önce "
+                                     "(köprü düşmüş olabilir — server-whatsapp'a bakılsın; cfv yalnız okur)"))
+
     # --- yer: yedek klasörleri ve depo1 boşluğu
     bsize = _dir_size(data / "processed" / "yedek", data / "processed" / "photos" / "yedek-gunluk")
     free = shutil.disk_usage(data.resolve()).free
@@ -244,6 +270,8 @@ def report(ev: dict) -> str:
         f"takvim   çekim {a(k['takvim']['son_cekim'])} önce · DB'deki çekim {a(k['takvim']['db_snapshot'])} önce",
         f"gmail    çekim " + ", ".join(f"{h} {a(t)}" for h, t in k["gmail"]["son_cekim"].items())
         + f" önce · ham en yeni {a(k['gmail']['ham_en_yeni'])} · DB en yeni {a(k['gmail']['db_son_olay'])} önce",
+        f"wa-köprü store son mesaj {a(k['wa_kopru']['store_son'])} önce · DB son "
+        + (f"{a(k['wa_kopru']['db_son_olay'])} önce" if k["wa_kopru"]["db_son_olay"] else "henüz yok"),
         f"iphone   {k['iphone']['extract']} ({k['iphone']['durum']}, {a(k['iphone']['tarih'])} önce)",
         f"yer      yedekler {k['yer']['yedek_bayt'] / 2**30:.2f} GB · depo1 boş {k['yer']['bos_bayt'] / 2**30:.0f} GB",
     ]
