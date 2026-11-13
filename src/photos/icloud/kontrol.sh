@@ -22,6 +22,8 @@ case "$son" in
   *) sonuc="hata(${EXIT_STATUS:-?})" ;;
 esac
 indirilen=$(grep -cE '^[0-9-]+ [0-9:]+ INFO +Downloaded ' <<<"$run")
+# indir.py: dosya indi ama liste/mtime yazılamadı (indirme hatası değil, tur tekrarlanmaz)
+uyari=$(grep -cE '^[0-9-]+ [0-9:]+ WARNING ' <<<"$run")
 # (ikinci kopya listesi $ST/indirilenler.txt'yi indir.py her yerleşen dosyada kendisi yazar)
 
 mkdir -p "$DURUM"
@@ -45,6 +47,7 @@ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date '+%F %T')" "$mode" "$s
 sorun=()
 [ "$sonuc" = tamam ] || [ "$sonuc" = atlandi ] || sorun+=("tur sonucu: $sonuc (son: ${son:-yok})")
 [ -n "$onceki" ] && [ "$medya" -lt "$onceki" ] && sorun+=("medya sayısı AZALDI: $onceki → $medya (biri sildi mi?)")
+[ "$uyari" -gt 0 ] && sorun+=("$uyari WARNING: dosya indi ama liste/mtime yazılamadı (izin?); log'a bak")
 [ "$yarim" -gt 0 ] && sorun+=("$yarim yarım dosya (.part/.cfv-part/.kv-part) duruyor")
 # '-<boyut>' ekli dosya o boyutta değil (indir.py dokunmaz, rapora yazar) → elle bakılmalı
 yarimad=$(grep -c '^yarim' "$ST/farkli-$(date +%F).tsv" 2>/dev/null)

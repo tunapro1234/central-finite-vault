@@ -13,6 +13,12 @@ set -u
 : "${ICLOUD_USER:?ICLOUD_USER yok}"
 HERE=$(cd "$(dirname "$0")" && pwd)
 . "$HERE/ortam.sh"
+# Elle root çalıştırılırsa $ST'nin sahibine geç (2026-11-13: root turu indirilenler.txt'yi root yapmıştı).
+if [ "$(id -u)" -eq 0 ]; then
+  sahip=$(stat -c %U "$ST" 2>/dev/null || echo tunapro)
+  [ "$sahip" = root ] && { echo "$ST root sahipli; çıkılıyor" >&2; exit 4; }
+  exec runuser -u "$sahip" -- "$0" "$@"
+fi
 LOG=$ST/indirme.log
 MODE=${1:-gunluk}
 TRIES=${ICLOUD_TRIES:-30}

@@ -33,6 +33,17 @@ COOK = os.environ.get("ICLOUD_COOKIES", "/home/tunapro/.config/icloudpd")
 ST = os.environ.get("ICLOUD_STATE", "/home/tunapro/.local/state/cfv-icloudpd")
 
 
+
+def root_mu() -> bool:
+    """root ise uyarıp True döner: elle root turu $ST'de root sahipli dosya bırakır (2026-11-10 → 11-13 hatası)."""
+    if os.geteuid() != 0:
+        return False
+    import sys
+    print("root ile çalıştırılmaz ($ST'de root sahipli dosya kalır). Sahibiyle çalıştır: "
+          "runuser -u tunapro -- ... (ya da cfv-icloudpd.sh, kendisi geçer)", file=sys.stderr)
+    return True
+
+
 @dataclass
 class Job:
     role: str            # original | adjusted | live

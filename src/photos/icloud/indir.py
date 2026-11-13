@@ -17,6 +17,10 @@ Kullanım: indir.py gunluk|tam|tam-video [--liste]   (--liste: indirmez, eksikle
 Ortam: ICLOUD_USER, ICLOUD_DIR, ICLOUD_COOKIES, ICLOUD_STATE, ICLOUD_UNTIL (gunluk: art arda tam öğe, 300)
 Her yerleşen dosya (ve .xmp'si) $ST/indirilenler.txt'ye eklenir (ikinci-kopya.sh bunu okur).
 Log satırları icloudpd biçiminde ('INFO     Downloaded <yol>'), kontrol.sh bunları sayar.
+Yerleştikten sonraki adımlar (liste, mtime, geçici dosya silme) başarısız olursa dosya İNMİŞ sayılır:
+WARNING satırı yazılır (tur tekrarlanmaz, kontrol.sh sayar). 2026-11-13: root sahipli indirilenler.txt yüzünden
+97 dosya "başarısız" sayılıp yeniden indirilmiş, .xmp'leri yazılmamıştı.
+root ile çalışmaz (çıkış 4): $ST'de root sahipli dosya bırakır. Elle: runuser -u tunapro -- ... ya da sarmalayıcı.
 Çıkış: 0 tamam, 1 bazı dosyalar inmedi, 2 giriş gerekiyor (Tuna 2FA), 3 ağ/servis hatası, 4 kullanım/kilit.
 """
 
@@ -43,6 +47,7 @@ class _Log:
     def _w(self, level, msg, *a):
         print(f"{dt.datetime.now():%Y-%m-%d %H:%M:%S} {level:<8} {msg % a if a else msg}", flush=True)
     def info(self, m, *a): self._w("INFO", m, *a)
+    def warning(self, m, *a): self._w("WARNING", m, *a)
     def error(self, m, *a): self._w("ERROR", m, *a)
 
 
@@ -58,9 +63,12 @@ def _fsync_dir(d: str) -> None:
 
 
 def _note(path: str) -> None:
-    """Yerleşen dosyayı ikinci kopya listesine ekle."""
-    with open(os.path.join(Y.ST, "indirilenler.txt"), "a") as f:
-        f.write(path + "\n")
+    """Yerleşen dosyayı ikinci kopya listesine ekle. Yazılamazsa uyarır; indirme hatası DEĞİL."""
+    try:
+        with open(os.path.join(Y.ST, "indirilenler.txt"), "a") as f:
+            f.write(path + "\n")
+    except OSError as e:
+        log.warning("Listeye yazılamadı (%s), dosya yerinde: %s", str(e)[:120], path)
 
 
 def fetch(session, job: Y.Job, created: dt.datetime) -> bool:
@@ -90,18 +98,23 @@ def fetch(session, job: Y.Job, created: dt.datetime) -> bool:
             if got != job.size:
                 raise IOError(f"boyut {got} != {job.size}")
             os.link(tmp, job.path)  # hedef varsa FileExistsError → üzerine yazma yok
-            os.unlink(tmp)
-            _fsync_dir(d)
-            set_utime(job.path, created)
-            _note(job.path)
-            log.info("Downloaded %s", job.path)
-            return True
         except FileExistsError:
             log.error("Hedef bu arada oluşmuş, dokunulmadı: %s", job.path)
             return False
         except Exception as e:  # ağ kesintisi / IncompleteRead → Range ile devam
             log.info("Deneme %d başarısız (%s): %s", attempt + 1, str(e)[:120], job.path)
             time.sleep(min(60, 5 * (attempt + 1)))
+            continue
+        # Yerleşti (boyut tuttu, link oldu). Buradan sonraki hata yeniden indirme sebebi değil.
+        for adim, fn in (("geçici dosya silme", lambda: os.unlink(tmp)), ("dizin fsync", lambda: _fsync_dir(d)),
+                         ("mtime", lambda: set_utime(job.path, created))):
+            try:
+                fn()
+            except Exception as e:
+                log.warning("İndi ama %s başarısız (%s): %s", adim, str(e)[:120], job.path)
+        _note(job.path)
+        log.info("Downloaded %s", job.path)
+        return True
     log.error("İnmedi (6 deneme): %s", job.path)
     return False
 
@@ -133,6 +146,8 @@ def plan(job: Y.Job):
 
 def main() -> int:
     args = sys.argv[1:]
+    if Y.root_mu():
+        return 4
     mode = next((a for a in args if not a.startswith("--")), "gunluk")
     only_list, only_auth = "--liste" in args, "--oturum" in args
     user = os.environ.get("ICLOUD_USER")

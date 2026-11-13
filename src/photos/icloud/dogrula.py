@@ -25,6 +25,8 @@ ROOT, ST, EXIF_FARK = Y.ROOT, Y.ST, Y.EXIF_FARK
 
 
 def main() -> int:
+    if Y.root_mu():
+        return 4
     user = os.environ.get("ICLOUD_USER") or sys.exit("ICLOUD_USER yok")
     try:
         api = Y.login(user, Y.COOK)
