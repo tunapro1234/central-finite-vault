@@ -21,6 +21,7 @@ SOURCES = {
     "contacts": "contacts",  # gmail/whatsapp'tan önce: kişi takma adları onlarla birleşsin
     "gmail": "gmail",
     "whatsapp": "whatsapp",
+    "whatsapp-kopru": "whatsapp_kopru",  # whatsapp'tan sonra: iPhone'daki stanza id'ler atlanır
     "callhistory": "callhistory",  # whatsapp'tan sonra: CallKit WhatsApp aramaları çift sayılmasın
     "zepp": "zepp",
     "health": "health",  # zepp'ten sonra: zepp.py'nin kapsadığı günler Sağlık'tan tekrar alınmasın

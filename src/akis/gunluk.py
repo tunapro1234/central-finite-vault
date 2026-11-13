@@ -46,6 +46,8 @@ WAIT_MAX_S = 2 * 3600
 # azalma eşiği: max(ABS, oran × önceki); takvimden silinen olay olağan → calendar-google için %5
 DROP_ABS, DROP_RATIO = 10, 0.01
 DROP_RATIO_KIND = {"calendar-google": 0.05}
+# iPhone yedeği gelince köprü mesajları whatsapp-kopru → whatsapp geçer: kopru'nun düşüşünden whatsapp artışı düşülür
+HANDOVER = {"whatsapp-kopru": "whatsapp"}
 KIND_OF = {"photos": "iphone-photos", "notes": "apple-notes", "reports": "reports"}  # cfv ingest adı → source.kind
 # foto türevleri: tur boyunca değişebilecek dosyalar (değiştiyse önceki hali yedek-gunluk/<tarih>/'e)
 FOTO_FILES = ["signals.json", "scores.tsv", "stickers.json", "hash256.tsv", "mid/yollar.tsv", "vectors.sqlite"]
@@ -180,6 +182,9 @@ def drops(before: dict[str, int], after: dict[str, int], skipped: set[str]) -> l
     out = []
     for k, b in sorted(before.items()):
         a = after.get(k, 0)
+        if k in HANDOVER:
+            h = HANDOVER[k]
+            a += max(0, after.get(h, 0) - before.get(h, 0))
         lim = max(DROP_ABS, math.ceil(b * DROP_RATIO_KIND.get(k, DROP_RATIO)))
         if b - a > lim:
             out.append(f"{k}: {b} → {a} ({a - b:+d}, eşik -{lim})")
@@ -301,6 +306,15 @@ def nightly(args) -> int:
     log(f"=== gece turu başladı{' (DENEME: canlıya yazmaz)' if args.dry_run else ''}")
 
     summary["eksik"] = [] if args.no_wait else wait_fetchers()
+    # 0) WhatsApp köprüsü: store'un yeni satırları raw/whatsapp-kopru'ya (salt-okur; deneme turunda yalnız sayar)
+    try:
+        from cfv.sources import whatsapp_kopru
+        wk = whatsapp_kopru.collect(dry_run=args.dry_run)
+        summary["wa_kopru"] = wk
+        log(f"[wa-köprü] {json.dumps(wk, ensure_ascii=False)}")
+    except Exception as e:  # köprü store'u yoksa/okunamazsa tur sürer; ingest eldeki raw ile koşar
+        run_problems.append(f"wa-köprü topla: {e}")
+        log(f"[wa-köprü] HATA {e}")
     before = sayim.counts(live)
     alias_before = sayim.alias_count(live)
     ev_before = sayim.eval_match(live)
