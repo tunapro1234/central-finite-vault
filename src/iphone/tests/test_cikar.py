@@ -165,3 +165,29 @@ def test_denetim_quick_check_ve_son_kayit(tmp_path):
     assert d["son_kayit"]["CallHistory"].startswith("2025-")
     assert any(u.startswith("CallHistory: son kayıt") for u in d["uyari"])
     assert not list(p.parent.glob("*-shm"))                       # kaynağa dosya eklenmedi
+
+
+def test_denetim_ozel_tokenizer_uyari_degil(tmp_path, monkeypatch):
+    ext = tmp_path / "ext"
+    p = ext / "HomeDomain/Library/AddressBook/AddressBook.sqlitedb"
+    p.parent.mkdir(parents=True)
+    sqlite3.connect(p).close()
+    real = denetim.ac
+
+    class Bag:
+        def __init__(self, c):
+            self.c = c
+
+        def execute(self, q):
+            raise sqlite3.OperationalError("unknown tokenizer: ab_cf_tokenizer")
+
+    import contextlib
+
+    @contextlib.contextmanager
+    def sahte(db):
+        with real(db) as c:
+            yield Bag(c)
+    monkeypatch.setattr(denetim, "ac", sahte)
+    d = denetim.denetle(ext, None)
+    assert d["quick_check"]["Rehber"].startswith("atlandı")
+    assert not any("Rehber" in u for u in d["uyari"])

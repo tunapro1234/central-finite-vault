@@ -136,8 +136,9 @@ def denetle(ext: Path, onceki_ext: Path | None, sayac: dict | None = None, tarih
                     q, birim = SON_KAYIT[ad]
                     son[ad] = _zaman(c.execute(q).fetchone()[0], birim)
         except sqlite3.Error as e:
-            kontrol[ad] = f"hata: {e}"
-        if kontrol[ad] != "ok":
+            # Apple'ın kendi FTS tokenizer'ı (ör. AddressBook ab_cf_tokenizer) burada yok: bozukluk değil, atla
+            kontrol[ad] = "atlandı (özel FTS tokenizer)" if "unknown tokenizer" in str(e) else f"hata: {e}"
+        if kontrol[ad] not in ("ok", "atlandı (özel FTS tokenizer)"):
             uyari.append(f"{ad} quick_check: {kontrol[ad]}")
     if gerekli.get("Zepp"):
         son["Zepp (dosya)"] = dt.datetime.fromtimestamp(gerekli["Zepp"].stat().st_mtime, ayar.TZ).isoformat(

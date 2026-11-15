@@ -1,0 +1,47 @@
+[Unit]
+Description=CFV: sabah kestirmesi giriş ucu (127.0.0.1:3070, POST /sabah/v1 → data/raw/sabah)
+Documentation=file:///srv/cfv/iphone/PLAN.md
+RequiresMountsFor=/mnt/depo1
+After=network.target
+
+[Service]
+# PLAN §9.2: data/ root 700 ve ACL'siz → DynamicUser olamaz; root ama yetkisiz ve kısıtlı.
+# Yalnız iki yere yazabilir: raw/sabah (yalnız ekler, link() ile; üzerine yazamaz) ve work/sabah-tmp.
+# Kod: yalnız commit'lenmiş kodu tutan worktree (/srv/cfv/prod).
+ExecStart=/usr/bin/python3 -I /srv/cfv/prod/src/sabah/cfv_sabah.py serve
+Environment=CFV_DATA=/mnt/depo1/cfv/data
+Environment=PYTHONUNBUFFERED=1
+LoadCredential=token:/root/.config/cfv-sabah/token
+UMask=0077
+Restart=on-failure
+RestartSec=5
+ProtectSystem=strict
+ReadWritePaths=/mnt/depo1/cfv/data/raw/sabah /mnt/depo1/cfv/data/work/sabah-tmp
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost
+MemoryMax=128M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target

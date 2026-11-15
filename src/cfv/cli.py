@@ -25,6 +25,7 @@ SOURCES = {
     "callhistory": "callhistory",  # whatsapp'tan sonra: CallKit WhatsApp aramaları çift sayılmasın
     "zepp": "zepp",
     "health": "health",  # zepp'ten sonra: zepp.py'nin kapsadığı günler Sağlık'tan tekrar alınmasın
+    "sabah": "sabah",  # health'ten sonra: haftalık yedeğin kapsadığı gün/gece/tartı kestirmeden tekrar alınmasın
     "dream": "dream",
 }
 
