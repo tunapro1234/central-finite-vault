@@ -52,7 +52,8 @@ def test_yazar_ve_tek_bicim(uc):
     kayit = json.loads(f.read_text())
     assert kayit == {"alindi_at": "2026-11-16T05:12:03Z", "govde": g.decode()}   # gövde bayt bayt aynen
     assert f.stat().st_mode & 0o777 == 0o600
-    assert not list((kok / "work/sabah-tmp").iterdir())
+    assert sorted(p.name for p in (kok / "raw/sabah/2026-11").iterdir()) == [f"{gid}.json"]   # artık ad yok
+    assert not (kok / "work/sabah-tmp").exists()
 
 
 def test_tekrar_uzerine_yazmaz(uc):

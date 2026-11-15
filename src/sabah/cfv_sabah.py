@@ -4,8 +4,8 @@
                    → data/raw/sabah/<UTC YYYY-MM>/<gonderim_id>.json = {"alindi_at", "govde"} (gövde bayt bayt aynen)
   Gerisi 404. Yanıtlar: 200 {"ok":true[, "tekrar":true]}, 400 bozuk, 401 token, 413 büyük, 429 günlük sınır.
 
-Atomik ve yalnız ekleyen yazım: tmp (data/work/sabah-tmp, aynı disk) → fsync → link() hedefe (hedef varsa başarısız,
-yani üzerine yazma imkânsız) → tmp adı kaldırılır. IP, kimlik, cihaz bilgisi kaydedilmez; erişim logu yok.
+Atomik ve yalnız ekleyen yazım: hedef ay klasöründe adsız dosya (O_TMPFILE) → fsync → link() ile ad (hedef varsa
+başarısız, yani üzerine yazma imkânsız). Ayrı tmp klasörü ve silinen ad yok. IP, kimlik, cihaz bilgisi kaydedilmez; erişim logu yok.
 
 Komutlar:  serve        (cfv-sabah.service)
            token-uret   (Tuna, kendi terminalinde: yeni token üretir, dosyaya yazar, ekrana BİR KEZ basar)
@@ -72,30 +72,32 @@ def kaydet(govde: bytes, gonderim_id: str, simdi: dt.datetime, kok: Path | None 
     hedef = ay / f"{gonderim_id}.json"
     if hedef.exists():
         return False
-    tmpdir = kok / "work" / "sabah-tmp"
-    tmpdir.mkdir(mode=0o700, parents=True, exist_ok=True)
     kayit = json.dumps({"alindi_at": simdi.isoformat(timespec="seconds").replace("+00:00", "Z"),
                         "govde": govde.decode("utf-8")}, ensure_ascii=False).encode("utf-8")
-    tmp = tmpdir / f"{gonderim_id}.{secrets.token_hex(4)}.tmp"
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    ay.mkdir(mode=0o700, parents=True, exist_ok=True)
+    # Adsız dosya (O_TMPFILE) doğrudan hedef klasörde: adı yokken yazılır ve fsync'lenir, sonra tek link() ile ad alır.
+    # Ayrı tmp klasörü yok: systemd ReadWritePaths her yolu ayrı bind mount yapar, aralarında link() EXDEV verir.
+    # Çökme olursa adsız dosya kendiliğinden kaybolur; raw'da hiçbir şey silinmez, yarım ad görünmez.
+    dfd = os.open(ay, os.O_RDONLY | os.O_DIRECTORY)
     try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(kayit)
-            f.flush()
-            os.fsync(f.fileno())
-        ay.mkdir(mode=0o700, parents=True, exist_ok=True)
+        fd = os.open(ay, os.O_TMPFILE | os.O_WRONLY, 0o600)
         try:
-            os.link(tmp, hedef)
-        except FileExistsError:
-            return False
-        dfd = os.open(ay, os.O_RDONLY | os.O_DIRECTORY)
-        try:
-            os.fsync(dfd)
+            with os.fdopen(fd, "wb", closefd=False) as f:
+                f.write(kayit)
+                f.flush()
+                os.fsync(fd)
+            try:
+                # dst_dir_fd verilince CPython linkat(AT_SYMLINK_FOLLOW) çağırır (yoksa düz link() /proc bağını bağlar
+                # ve EXDEV olur); /proc/self/fd yolu CAP_DAC_READ_SEARCH gerektirmez.
+                os.link(f"/proc/self/fd/{fd}", hedef.name, dst_dir_fd=dfd, follow_symlinks=True)
+            except FileExistsError:
+                return False
         finally:
-            os.close(dfd)
-        return True
+            os.close(fd)
+        os.fsync(dfd)
     finally:
-        tmp.unlink(missing_ok=True)
+        os.close(dfd)
+    return True
 
 
 def dogrula(govde: bytes) -> str:

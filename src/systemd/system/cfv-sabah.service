@@ -6,7 +6,8 @@ After=network.target
 
 [Service]
 # PLAN §9.2: data/ root 700 ve ACL'siz → DynamicUser olamaz; root ama yetkisiz ve kısıtlı.
-# Yalnız iki yere yazabilir: raw/sabah (yalnız ekler, link() ile; üzerine yazamaz) ve work/sabah-tmp.
+# Yalnız raw/sabah'a yazabilir (adsız dosya + link(), yalnız ekler; üzerine yazamaz). Ayrı tmp klasörü YOK: iki
+# ReadWritePaths ayrı bind mount olur ve aralarında link() EXDEV verir (2026-11-15 kurulum testinde görüldü).
 # Kod: yalnız commit'lenmiş kodu tutan worktree (/srv/cfv/prod).
 ExecStart=/usr/bin/python3 -I /srv/cfv/prod/src/sabah/cfv_sabah.py serve
 Environment=CFV_DATA=/mnt/depo1/cfv/data
@@ -16,7 +17,7 @@ UMask=0077
 Restart=on-failure
 RestartSec=5
 ProtectSystem=strict
-ReadWritePaths=/mnt/depo1/cfv/data/raw/sabah /mnt/depo1/cfv/data/work/sabah-tmp
+ReadWritePaths=/mnt/depo1/cfv/data/raw/sabah
 ProtectHome=yes
 PrivateTmp=yes
 PrivateDevices=yes
