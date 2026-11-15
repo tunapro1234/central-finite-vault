@@ -228,3 +228,71 @@ def test_snapshot_only_adds(tmp_path):
     run()
     assert first.read_bytes() == old
     assert subprocess.run(["zstd", "-dc", str(first)], capture_output=True, text=True).stdout == "v1"
+
+
+meta_watch = _load("gsync_meta_watch", GSYNC / "meta_watch.py")
+
+
+def _gmail(tmp_path, msgs):
+    d = tmp_path / "data"
+    (d / "config").mkdir(parents=True, exist_ok=True)
+    (d / "config" / "gmail-accounts").write_text("me@example.com\n")
+    a = d / "raw" / "gmail" / "me@example.com"
+    a.mkdir(parents=True, exist_ok=True)
+    (a / "messages.jsonl").write_text("".join(json.dumps(m) + "\n" for m in msgs))
+    return d
+
+
+def _m(i, time, frm="Instagram <security@mail.instagram.com>", subj="Your Meta information download is ready"):
+    return {"id": f"m{i}", "time": time, "from": frm, "subject": subj, "snippet": "GİZLİ-İÇERİK https://x"}
+
+
+@pytest.mark.parametrize("m,ok", [
+    (_m(1, "t"), True),
+    (_m(1, "t", subj="Bilgilerin indirilmeye hazır"), True),
+    (_m(1, "t", frm="Meta <notification@facebookmail.com>", subj="Your information is ready to download"), True),
+    (_m(1, "t", subj="Your Meta download request is in progress"), False),
+    (_m(1, "t", frm="kotu@example.com"), False),                     # gönderen Meta değil
+])
+def test_meta_watch_matcher(m, ok):
+    assert meta_watch.is_ready_mail(m) is ok
+
+
+def test_meta_watch_notifies_once(tmp_path, monkeypatch):
+    now = dt.datetime(2026, 1, 10, 6, tzinfo=dt.timezone.utc)
+    calls = []
+    monkeypatch.setattr(meta_watch.subprocess, "run",
+                        lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(meta_watch, "DATA", _gmail(tmp_path, [_m(1, "2026-01-01T10:00:00Z")]))  # eski
+    r = meta_watch.run(now)                                   # ilk çalıştırma: bildirim yok
+    assert r["first"] and calls == []
+
+    monkeypatch.setattr(meta_watch, "DATA", _gmail(tmp_path, [
+        _m(1, "2026-01-01T10:00:00Z"),                        # pencere dışı (>4 gün)
+        _m(2, "2026-01-09T10:25:00Z"),                        # yeni hazır maili
+        _m(3, "2026-01-09T10:15:00Z", subj="Your Meta download request is in progress"),
+    ]))
+    r = meta_watch.run(now)
+    assert r["sent"] == ["m2"]
+    assert [c[0] for c in calls] == ["laptop-notify", "bp"]
+    assert calls[0][1:] == ["Instagram verisi hazır", "me hesabına Meta indirme maili geldi, bağlantı birkaç gün geçerli",
+                            "normal"]
+    assert calls[1][1:3] == ["msg", "server-cfv"]
+    assert all("GİZLİ" not in x and "https" not in x and "download is ready" not in x for c in calls for x in c)
+
+    calls.clear()
+    assert meta_watch.run(now)["sent"] == [] and calls == []  # aynı mail ikinci kez bildirilmez
+    seen = json.loads((tmp_path / "data" / "logs" / "meta-watch.json").read_text())["seen"]
+    assert seen == ["m2"]
+
+
+def test_meta_watch_retries_if_nothing_sent(tmp_path, monkeypatch):
+    now = dt.datetime(2026, 1, 10, 6, tzinfo=dt.timezone.utc)
+    d = _gmail(tmp_path, [])
+    (d / "logs").mkdir()
+    (d / "logs" / "meta-watch.json").write_text('{"seen": []}')
+    (d / "raw" / "gmail" / "me@example.com" / "messages.jsonl").write_text(json.dumps(_m(2, "2026-01-09T10:25:00Z")) + "\n")
+    monkeypatch.setattr(meta_watch, "DATA", d)
+    monkeypatch.setattr(meta_watch.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1))
+    assert meta_watch.run(now)["sent"] == []                  # hiçbir bildirim gitmedi → yarın yeniden dener
+    assert json.loads((d / "logs" / "meta-watch.json").read_text())["seen"] == []
