@@ -43,6 +43,7 @@ DAY_START_H = 5
 # Payla: 03:25–04:05. Elle tur bu pencereye denk gelirse canlıya yazmadan önce bekler.
 BORG_WINDOW = ((3, 25), (4, 5))
 WAIT_MAX_S = 2 * 3600
+LOCK_WAIT_S = 15 * 60
 # azalma eşiği: max(ABS, oran × önceki); takvimden silinen olay olağan → calendar-google için %5
 DROP_ABS, DROP_RATIO = 10, 0.01
 DROP_RATIO_KIND = {"calendar-google": 0.05}
@@ -82,15 +83,23 @@ def run(cmd: list[str], *, timeout: int = 4 * 3600, env: dict | None = None) -> 
     return rc, out, time.time() - t
 
 
-def lock():
+def lock(wait_s: int = LOCK_WAIT_S):
+    """Kısa turlar (hafif tur, cfv-ruya dream ingest'i) kilidi birkaç dakika tutabilir: en çok wait_s bekle."""
     p = proc() / ".akis.lock"
     p.parent.mkdir(parents=True, exist_ok=True)
-    f = open(p, "w")
-    try:
-        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        log("başka bir akış turu çalışıyor; çıkıyorum")
-        sys.exit(0)
+    f = open(p, "a")
+    t0 = time.time()
+    while True:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            break
+        except BlockingIOError:
+            if time.time() - t0 >= wait_s:
+                log(f"başka bir akış turu {wait_s // 60} dk'dır sürüyor; çıkıyorum")
+                sys.exit(0)
+            time.sleep(10)
+    if time.time() - t0 > 10:
+        log(f"kilit {time.time() - t0:.0f} sn beklendi (hafif tur/rüya)")
     return f
 
 
@@ -315,6 +324,8 @@ def nightly(args) -> int:
     except Exception as e:  # köprü store'u yoksa/okunamazsa tur sürer; ingest eldeki raw ile koşar
         run_problems.append(f"wa-köprü topla: {e}")
         log(f"[wa-köprü] HATA {e}")
+    from akis import hafif
+    hafif_fp = hafif.fingerprint()  # `ingest all` sabah/zepp-cloud'u da alır → hafif tur aynı ham veriyi tekrar işlemesin
     before = sayim.counts(live)
     alias_before = sayim.alias_count(live)
     ev_before = sayim.eval_match(live)
@@ -398,6 +409,7 @@ def nightly(args) -> int:
     rm_sqlite(stage)
     summary["sureler"]["yayin"] = round(time.time() - t)
     log("canlı cfv.sqlite güncellendi")
+    hafif.mark_done(hafif_fp, "gece")
 
     # 4) timeline
     tl = proc() / "timeline"

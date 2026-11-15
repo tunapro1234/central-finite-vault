@@ -1,0 +1,11 @@
+[Unit]
+Description=CFV: hafif tur 05:00–23:45 her 15 dk (sabah kestirmesi, Zepp bulutu, tartı; parmak izi aynıysa iş yok)
+
+[Timer]
+OnCalendar=*-*-* 05..23:00/15
+# kaçan tik telafi edilmez: bir sonraki tik zaten aynı işi yapar
+Persistent=false
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
