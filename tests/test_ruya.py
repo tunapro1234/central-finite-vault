@@ -242,3 +242,14 @@ def test_is_dream_chat(env):
     assert ruya.is_dream_chat("x@g.us", "🌙 Rüya") and ruya.is_dream_chat("x@g.us", "ruya 🌙")
     assert not ruya.is_dream_chat("x@g.us", "Rüya", group=False)       # DM'de kişi adı
     assert not ruya.is_dream_chat("x@g.us", "Rüya Grubu") and not ruya.is_dream_chat(None, None)
+
+
+def test_kurulum_testi_kestirmesi_okunmaz(env):
+    root, _ = env
+    k = root / "raw" / "sabah" / "2026-11"
+    k.mkdir(parents=True)
+    at = "2026-11-11T07:10:00+03:00"
+    (k / "t1.json").write_text(json.dumps({"alindi_at": at, "govde": json.dumps(
+        {"v": 1, "gonderim_id": "t1", "tetik": "kurulum-testi:cfv-iphone",
+         "ruya": {"durum": "gordum", "metin": "sentetik", "soruldu_at": at, "cevaplandi_at": at}})}))
+    assert ruya.dreams() == []

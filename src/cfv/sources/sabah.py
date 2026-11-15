@@ -26,6 +26,7 @@ from cfv.ingest import Batch, raw
 from cfv.timeutil import iso, local_date
 
 IMPORTER = "cfv.sources.sabah@1"
+TEST_TETIK = "kurulum-testi:"   # raw/sabah/2026-11/5a74ead0-…json (PLAN cfv/iphone §9.5): silinmez, okunmaz
 NIGHT_GAP = dt.timedelta(hours=4)
 WORKOUT_MATCH = dt.timedelta(minutes=10)
 # Health Uyku Analizi değeri → health.py/zepp.py anahtarları (Sağlık'ın 'core'u = 'light'). Kestirmeler değeri
@@ -80,8 +81,14 @@ def _num(v) -> float | None:
     return None
 
 
-def read_posts(root: Path) -> tuple[list[tuple[dt.datetime, dict]], int]:
-    posts, bad = [], 0
+def is_test(govde: dict) -> bool:
+    """Kurulum/deneme gönderimi (tetik "kurulum-testi:..."): ham kayıt durur ama hiçbir okuyucu olay üretmez."""
+    return str(govde.get("tetik") or "").startswith(TEST_TETIK)
+
+
+def read_posts(root: Path) -> tuple[list[tuple[dt.datetime, dict]], int, int]:
+    """(gönderimler, bozuk dosya sayısı, atlanan test gönderimi sayısı)."""
+    posts, bad, test = [], 0, 0
     for f in sorted(root.glob("*/*.json")):
         try:
             rec = json.loads(f.read_text(encoding="utf-8"))
@@ -92,9 +99,12 @@ def read_posts(root: Path) -> tuple[list[tuple[dt.datetime, dict]], int]:
         except (OSError, ValueError, KeyError, TypeError):
             bad += 1
             continue
+        if is_test(govde):
+            test += 1
+            continue
         posts.append((alindi, govde))
     posts.sort(key=lambda p: p[0])
-    return posts, bad
+    return posts, bad, test
 
 
 def coverage(conn) -> tuple[set[str], set[str], set[str], list[dt.datetime]]:
@@ -117,10 +127,11 @@ def ingest(conn, root: Path | None = None) -> dict:
     root = root or raw("sabah")
     if not root.is_dir():
         raise FileNotFoundError(root)
-    posts, bad = read_posts(root)
+    posts, bad, test = read_posts(root)
     batch = Batch(conn, "sabah", root, IMPORTER)
     nights_cov, days_cov, meas_cov, workouts_cov = coverage(conn)
-    stats = {"posts": len(posts), "bad_files": bad, "bad_samples": 0, "sleeps": 0, "measurements": 0, "days": 0,
+    stats = {"posts": len(posts), "test_posts": test, "bad_files": bad, "bad_samples": 0, "sleeps": 0,
+             "measurements": 0, "days": 0,
              "workouts": 0, "covered": 0, "last_post": iso(posts[-1][0]) if posts else None}
 
     sleep: set[tuple] = set()

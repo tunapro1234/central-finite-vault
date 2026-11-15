@@ -140,6 +140,8 @@ def parts() -> list[dict]:
             g = json.loads(json.loads(f.read_text(encoding="utf-8"))["govde"])
         except (ValueError, KeyError, TypeError):
             continue
+        if str(g.get("tetik") or "").startswith("kurulum-testi:"):
+            continue                      # cfv-iphone kurulum testi (sources/sabah.py TEST_TETIK): kayıt değil
         r, gid = g.get("ruya"), g.get("gonderim_id") or f.stem
         if gid in seen or not isinstance(r, dict) or r.get("durum") not in ("gordum", "hatirlamiyorum"):
             continue                      # tekrar gönderim, "atla", "sorulmadi", alan yok: kayıt değil

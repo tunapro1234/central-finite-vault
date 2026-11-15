@@ -116,3 +116,13 @@ def test_yerel_bicim(conn, tmp_path):
     assert (s["sleeps"], s["measurements"], s["bad_samples"]) == (1, 1, 0)
     (m,) = events(conn, "measurement")
     assert json.loads(m["payload"])["fat_pct"] == 18.1
+
+
+def test_kurulum_testi_atlanir(conn, tmp_path):
+    root = tmp_path / "data/raw/sabah"
+    post(root, {"tetik": "kurulum-testi:cfv-iphone", "uyku": UYKU, "tarti": TARTI,
+                "adim": [{"gun": "2026-11-15", "toplam": 8412}]})
+    post(root, {"tetik": "kurulum-testi:cfv-iphone"})
+    post(root, {"tetik": "app:WhatsApp", "adim": [{"gun": "2026-11-15", "toplam": 100}]})
+    s = sabah.ingest(conn)
+    assert (s["posts"], s["test_posts"], s["sleeps"], s["measurements"], s["days"]) == (1, 2, 0, 0, 1)
