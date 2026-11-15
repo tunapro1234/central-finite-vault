@@ -1,6 +1,6 @@
 [Unit]
 Description=CFV: Gmail salt-okur artımlı senkron (data/raw/gmail, hesaplar data/config/gmail-accounts)
-Documentation=file:///srv/central-finite-vault/src/cfv/gmail_sync.py
+Documentation=file:///srv/cfv/prod/src/cfv/gmail_sync.py
 Wants=network-online.target
 After=network-online.target
 RequiresMountsFor=/mnt/depo1
@@ -12,14 +12,14 @@ Environment=HOME=/root
 # bp msg imzası [service:cfv-gmail-sync], hedef server-cfv ve altı (meta_watch)
 Environment=BP_OWNER=server-cfv
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-Environment=CFV_GOG=/srv/central-finite-vault/src/gsync/gog-ro
+Environment=CFV_GOG=/srv/cfv/prod/src/gsync/gog-ro
 # eski messages.jsonl'ların tarihli kopyası (yalnız ekleme); başarısızsa senkron çalışmaz
-ExecStartPre=/bin/sh -c 'for f in /srv/central-finite-vault/data/raw/gmail/*/messages.jsonl; do [ -f "$$f" ] || continue; /srv/central-finite-vault/src/gsync/snapshot.sh "$$f" messages || exit 1; done'
+ExecStartPre=/bin/sh -c 'for f in /mnt/depo1/cfv/data/raw/gmail/*/messages.jsonl; do [ -f "$$f" ] || continue; /srv/cfv/prod/src/gsync/snapshot.sh "$$f" messages || exit 1; done'
 # gog anahtarlık şifresi: dosya 'export X=...' biçiminde (EnvironmentFile= okuyamaz, satırı journal'a basar),
 # bu yüzden kabukta yüklenir; içerik hiçbir yere yazılmaz. Dosya repo dışında, root 600.
-ExecStart=/bin/sh -c '. /root/.config/gogcli/keyring-pass.env && exec /root/.local/bin/uv run --quiet --directory /srv/central-finite-vault cfv sync gmail --no-ingest'
+ExecStart=/bin/sh -c '. /root/.config/gogcli/keyring-pass.env && exec /root/.local/bin/uv run --quiet --directory /srv/cfv/prod cfv sync gmail --no-ingest'
 # Meta/Instagram "indirmeye hazır" maili → Tuna'ya laptop-notify + server-cfv'ye bp msg (bir kez); hata senkronu bozmaz
-ExecStartPost=-/usr/bin/python3 -I /srv/central-finite-vault/src/gsync/meta_watch.py
+ExecStartPost=-/usr/bin/python3 -I /srv/cfv/prod/src/gsync/meta_watch.py
 Nice=10
 IOSchedulingClass=idle
 TimeoutStartSec=2h

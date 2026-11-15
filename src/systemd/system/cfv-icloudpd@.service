@@ -1,6 +1,6 @@
 [Unit]
 Description=CFV: iCloud Fotoğraflar çekimi (%i) → /mnt/depo1/foto/icloud-sync
-Documentation=file:///srv/central-finite-vault/src/photos/icloud/cfv-icloudpd.sh
+Documentation=file:///srv/cfv/prod/src/photos/icloud/cfv-icloudpd.sh
 Wants=network-online.target
 After=network-online.target
 RequiresMountsFor=/mnt/depo1
@@ -12,9 +12,9 @@ User=tunapro
 EnvironmentFile=/etc/cfv-icloudpd.env
 # bp msg hedefi server-cfv ve altı (cfv-photos) ile sınırlı; imza [service:<birim>]
 Environment=BP_OWNER=server-cfv
-ExecStart=/srv/central-finite-vault/src/photos/icloud/cfv-icloudpd.sh %i
+ExecStart=/srv/cfv/prod/src/photos/icloud/cfv-icloudpd.sh %i
 # + = root: sayım/durum satırı ve bp alarmı (arşive yazmaz)
-ExecStopPost=+/srv/central-finite-vault/src/photos/icloud/kontrol.sh
+ExecStopPost=+/srv/cfv/prod/src/photos/icloud/kontrol.sh
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7

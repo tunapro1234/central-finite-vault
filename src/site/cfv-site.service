@@ -9,11 +9,11 @@ Description=CFV site: zaman çizgisi + kişi ağı (127.0.0.1:3050, SENTETİK ve
 After=network.target
 
 [Service]
-WorkingDirectory=/srv/central-finite-vault
+WorkingDirectory=/srv/cfv/prod
 Environment=CFV_SITE_HOST=127.0.0.1 CFV_SITE_PORT=3050
 Environment=CFV_DATA=/srv/cfv/site/mock-data
 Environment=CFV_SITE_REQUIRE_SYNTHETIC=1
-ExecStart=/srv/central-finite-vault/src/site/cfv-site serve
+ExecStart=/srv/cfv/prod/src/site/cfv-site serve
 Restart=on-failure
 RestartSec=3
 # şifre hash'i + oturumlar: /var/lib/cfv-site (700)
