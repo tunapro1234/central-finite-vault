@@ -1,0 +1,13 @@
+[Unit]
+Description=CFV: Zepp bulutu — sabah 06:30–12:30 saatte bir (uyku gelince o gün durur) + akşam 21:00 (günün adımı/egzersizi)
+Documentation=file:///srv/cfv/iphone/PLAN.md
+
+[Timer]
+OnCalendar=*-*-* 06..12:30:00 Europe/Istanbul
+OnCalendar=*-*-* 21:00:00 Europe/Istanbul
+RandomizedDelaySec=5min
+Persistent=false
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -8,10 +8,12 @@ dependencies = [
     "iphone-backup-decrypt==0.11.2",   # şifreli yedeği çözme (MIT)
     "pymobiledevice3==11.49.1",        # yalnız bir kez: lockdown wifi-connections on (+ B planı)
     "pyliblzfse==0.4.1",               # _tools/photos_meta.py (OCR blob'ları LZFSE)
+    "pycryptodome==4.4.0",             # cfv-zepp giriş gövdesi AES-CBC (zaten kilitte, iphone-backup-decrypt üzerinden)
 ]
 
 [project.scripts]
 cfv-iphone = "cfv_iphone.cli:main"
+cfv-zepp = "cfv_iphone.zepp:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

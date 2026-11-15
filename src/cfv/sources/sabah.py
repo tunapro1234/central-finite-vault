@@ -4,8 +4,8 @@ Her dosya tek `{"alindi_at", "govde"}` nesnesi; `govde` kestirmenin gönderdiği
 36 saati (tartıda 7 günü) yolladığı için aynı örnek birçok dosyada gelir: örnekler içerikleriyle tekilleştirilir.
 `ruya` alanı burada okunmaz (cfv-ruya'nın, `dream` kaynağı).
 
-Haftalık iPhone yedeği (health.py) ve Zepp uygulama yedeği (zepp.py) daha eksiksizdir, onlar kazanır. Bu yüzden
-SOURCES'ta health'ten SONRA koşar ve onların kapsadığı şeyi üretmez:
+Haftalık iPhone yedeği (health.py), Zepp uygulama yedeği (zepp.py) ve Zepp bulutu (zepp_cloud.py) daha eksiksizdir,
+onlar kazanır. Bu yüzden SOURCES'ta onlardan SONRA koşar ve onların kapsadığı şeyi üretmez:
   - sleep: o gece için health ya da zepp'te uyku olayı varsa üretilmez,
   - health_day: o gün health_day ya da zepp_day varsa üretilmez,
   - measurement: health'te aynı external_id (`measurement/<kaynak>/<UTC YYYY-MM-DDTHH:MM>`) varsa üretilmez,
@@ -98,9 +98,9 @@ def read_posts(root: Path) -> tuple[list[tuple[dt.datetime, dict]], int]:
 
 
 def coverage(conn) -> tuple[set[str], set[str], set[str], list[dt.datetime]]:
-    """health/zepp'in kapsadığı geceler, günler, ölçüm external_id'leri ve egzersiz başlangıçları."""
+    """health/zepp/zepp-cloud'un kapsadığı geceler, günler, ölçüm external_id'leri ve egzersiz başlangıçları."""
     rows = conn.execute("""SELECT e.kind, e.local_date, e.start_utc, e.external_id FROM event e
-                           JOIN source s ON s.id = e.source_id WHERE s.kind IN ('health', 'zepp')
+                           JOIN source s ON s.id = e.source_id WHERE s.kind IN ('health', 'zepp', 'zepp-cloud')
                            AND e.kind IN ('sleep', 'health_day', 'zepp_day', 'measurement', 'workout')""").fetchall()
     nights = {d for k, d, _, _ in rows if k == "sleep"}
     days = {d for k, d, _, _ in rows if k in ("health_day", "zepp_day")}

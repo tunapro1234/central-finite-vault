@@ -331,6 +331,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "iphone-backup-decrypt" },
+    { name = "pycryptodome" },
     { name = "pyliblzfse" },
     { name = "pymobiledevice3" },
 ]
@@ -343,6 +344,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "iphone-backup-decrypt", specifier = "==0.11.2" },
+    { name = "pycryptodome", specifier = "==4.4.0" },
     { name = "pyliblzfse", specifier = "==0.4.1" },
     { name = "pymobiledevice3", specifier = "==11.49.1" },
 ]

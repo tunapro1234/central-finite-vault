@@ -1,0 +1,23 @@
+[Unit]
+Description=CFV: Zepp bulutu çekimi (son 3 gün özet/ayrıntı/egzersiz → raw/zepp-cloud, resmî olmayan API)
+Documentation=file:///srv/cfv/iphone/PLAN.md
+RequiresMountsFor=/mnt/depo1
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Giriş ASLA buradan yapılmaz (giriş ucunda sıkı sınır var): token yoksa/düştüyse günde bir bp msg, Tuna
+# `cfv-zepp giris` ile elle yeniler. Sabah turları dünkü uyku geldikten sonra hemen çıkar (--sabah).
+Type=oneshot
+WorkingDirectory=/srv/cfv/prod/src/iphone
+Environment=CFV_DATA=/mnt/depo1/cfv/data
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=BP_OWNER=server-cfv
+UMask=0077
+ExecStart=/root/.local/bin/uv run --quiet --frozen --directory /srv/cfv/prod/src/iphone cfv-zepp cek --sabah
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=20
+# ağ 30 sn/istek + olası borg beklemesi (en çok 2 sa)
+TimeoutStartSec=2h30min
