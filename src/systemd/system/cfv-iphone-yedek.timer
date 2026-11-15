@@ -1,0 +1,11 @@
+[Unit]
+Description=CFV: iPhone yedek turu — her akşam 20:00 (bu hafta yedek varsa hemen çıkar; Pazar + telafi akşamları)
+Documentation=file:///srv/cfv/iphone/PLAN.md
+
+[Timer]
+OnCalendar=*-*-* 20:00:00 Europe/Istanbul
+Persistent=false
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,25 @@
+[Unit]
+Description=CFV: haftalık şifreli iPhone yedeği (Wi-Fi) → ham görüntü → çözülmüş çıkarım → denetim
+Documentation=file:///srv/cfv/iphone/PLAN.md
+RequiresMountsFor=/mnt/depo1
+Wants=cfv-netmuxd.service
+After=cfv-netmuxd.service network-online.target
+
+[Service]
+# Kod: yalnız commit'lenmiş kodu tutan worktree (/srv/cfv/prod); yarım kod akşam turuna girmez.
+# `tur`: bu haftanın Pazar'ından beri başarılı yedek yoksa 23:30'a kadar 15 dk'da bir telefonu arar; bulunca yedek
+# ister (telefonda şifre → laptop-notify critical), sonra görüntü/çıkarım/denetim, borg bitince `.tamam` + rename.
+Type=oneshot
+WorkingDirectory=/srv/cfv/prod/src/iphone
+Environment=CFV_DATA=/mnt/depo1/cfv/data
+Environment=HOME=/root
+Environment=PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin
+# bp msg servis imzası; hedef server-cfv
+Environment=BP_OWNER=server-cfv
+UMask=0077
+ExecStart=/root/.local/bin/uv run --quiet --frozen --directory /srv/cfv/prod/src/iphone cfv-iphone tur
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=20
+# pencere 3,5 sa + çıkarım + borg beklemesi en çok 2 sa
+TimeoutStartSec=10h

@@ -1,0 +1,44 @@
+[Unit]
+Description=CFV: netmuxd — iPhone'a Wi-Fi'dan usbmuxd protokolü (yalnız 127.0.0.1:27015; kaynak/sürüm /opt/netmuxd/SURUM)
+Documentation=file:///srv/cfv/iphone/PLAN.md
+After=network-online.target avahi-daemon.service
+Wants=network-online.target
+
+[Service]
+# server-main şartları (PLAN §10): root değil, yalnız loopback, ikinci mDNS dinleyicisi yok.
+#   --disable-mdns : telefonu avahi bulur (avahi-browse, D-Bus), cfv-iphone AddDevice ile buraya kaydeder
+#   --disable-usb  : USB sistem usbmuxd'de kalır      --disable-unix : /var/run/usbmuxd'ye dokunmaz
+# Eşleştirme kaydı (<UDID>.plist) StateDirectory'de; cfv-iphone eslestir onu /var/lib/lockdown'dan buraya kopyalar.
+ExecStart=/opt/netmuxd/bin/netmuxd --host 127.0.0.1 --port 27015 --disable-mdns --disable-usb --disable-unix --plist-storage /var/lib/cfv-netmuxd
+Environment=RUST_LOG=warn
+DynamicUser=yes
+StateDirectory=cfv-netmuxd
+StateDirectoryMode=0700
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+UMask=0077
+MemoryMax=256M
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
