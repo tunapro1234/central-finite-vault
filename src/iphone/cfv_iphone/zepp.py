@@ -43,6 +43,7 @@ LOG = "zepp-bulut.log"
 VER = "9.12.5"
 UA = f"Zepp/{VER} (Pixel 4; Android 12; Density/2.75)"
 _KEY, _IV = b"xeNtBVqzDc6tuNTh", b"MAAAYAAAAAAAAABg"
+GIRIS_KOMUTU = "cd /srv/cfv/prod/src/iphone && uv run cfv-zepp giris"
 URL_TOKENS = "https://api-user-us2.zepp.com/v2/registrations/tokens"
 URL_LOGIN = "https://api-mifit-us2.zepp.com/v2/client/login"
 # veri uçları için denenecek sunucular (hesabın bölgesine göre biri yanıt verir; çalışanı token dosyasına yazılır)
@@ -52,7 +53,7 @@ APP_HEADERS = {"appname": "com.huami.midong", "appplatform": "android_phone", "v
 
 
 class TokenHatasi(Exception):
-    """app_token geçersiz/süresi dolmuş: Tuna `cfv-zepp giris` ile yeniden girmeli."""
+    """Token yok, geçersiz ya da süresi dolmuş (çözüm: GIRIS_KOMUTU)."""
 
 
 def raw() -> Path:
@@ -170,7 +171,7 @@ def _token() -> dict:
     try:
         return json.loads(TOKEN.read_text())
     except FileNotFoundError:
-        raise TokenHatasi("token yok: Tuna `cfv-zepp giris` çalıştırmalı")
+        raise TokenHatasi("token yok")
 
 
 def _veri(host: str, yol: str, params: dict, t: dict, istek=_istek) -> tuple[int, bytes]:
@@ -274,7 +275,7 @@ def k_cek(a) -> int:
     except TokenHatasi as e:
         log(f"token: {e}")
         if d.get("token_uyari_gun") != bugun:      # günde en çok bir uyarı
-            _bp(f"Zepp bulutu: {e}. Tuna sunucu terminalinde `cfv-zepp giris` ile yeniden girmeli.")
+            _bp(f"Zepp bulutu: {e}; Tuna sunucu terminalinde girsin: {GIRIS_KOMUTU}")
             durum_yaz(token_uyari_gun=bugun)
         durum_yaz(token_hatasi=str(e), son_hata_at=dt.datetime.now(ayar.TZ).isoformat(timespec="seconds"))
         return 2

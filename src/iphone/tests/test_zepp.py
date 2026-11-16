@@ -106,3 +106,13 @@ def test_gecmis_klasoru(tmp_path):
 
     k = zepp.cek(3, istek, dt.datetime(2026, 11, 16, 9, 0, tzinfo=ayar.TZ), gecmis=dt.date(2019, 1, 1))
     assert k.name == "gecmis-2026-11-16" and gorulen[0]["from_date"] == ["2019-01-01"]
+
+
+def test_token_yok_uyarisi_tam_komut_gunde_bir(monkeypatch):
+    gonderilen = []
+    monkeypatch.setattr(zepp, "_bp", gonderilen.append)
+    a = zepp.main.__globals__["argparse"].Namespace(gun=3, sabah=False, gecmis=None)
+    assert zepp.k_cek(a) == 2 and zepp.k_cek(a) == 2
+    (m,) = gonderilen                                               # günde en çok bir uyarı
+    assert m == f"Zepp bulutu: token yok; Tuna sunucu terminalinde girsin: {zepp.GIRIS_KOMUTU}"
+    assert zepp.GIRIS_KOMUTU == "cd /srv/cfv/prod/src/iphone && uv run cfv-zepp giris"
